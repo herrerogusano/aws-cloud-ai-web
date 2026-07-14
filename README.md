@@ -124,4 +124,4 @@ Important:
 
 ## Next Planned Phase
 
-The exact recommended next step is to start Phase 5 from the implementation plan: connect the frontend to the local backend contract while keeping the backend response fixed.
+The exact recommended next step is to start Phase 4 from the implementation plan: define and validate the AWS SAM backend infrastructure around the local Lambda handler.
