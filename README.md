@@ -4,12 +4,12 @@
 
 ## Current Status
 
-The repository is in project foundation only.
+The repository now includes the local frontend shell for Phase 2.
 
-- Repository structure is prepared.
-- Python tooling is configured with `uv`.
-- Documentation and architecture decisions are recorded.
-- No frontend, Lambda handler, AWS infrastructure, or GitHub Actions workflow has been implemented yet.
+- Repository structure and Python tooling are prepared.
+- A local frontend exists in `frontend/` using plain HTML, CSS, and JavaScript.
+- The current frontend validates input, shows a loading state, returns a simulated response, and can simulate an error.
+- No backend, Lambda handler, AWS infrastructure, or GitHub Actions workflow has been implemented yet.
 - Nothing has been deployed and no AWS resources have been created for this project.
 
 ## Planned Architecture
@@ -62,12 +62,32 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
+python -m http.server 8000 --directory frontend
 ```
+
+Then open `http://127.0.0.1:8000`.
+
+For local error-state testing, open `http://127.0.0.1:8000/?simulateError=1`.
 
 Notes:
 
 - `mypy` was selected instead of Pyright to keep the initial toolchain Python-native and simple to run through `uv`.
 - `boto3` is intentionally not installed as a production dependency at this stage. The planned backend will run on AWS Lambda, where the AWS SDK is commonly available already. If later implementation needs an explicit pinned SDK dependency, that decision can be revisited.
+
+## Current Frontend Functionality
+
+- Accepts one question in a multiline text area
+- Rejects empty questions with client-side validation
+- Prevents repeated submissions while a simulated response is in progress
+- Shows a visible loading state
+- Displays a simulated success response with safe text rendering
+- Displays a simulated error message when `?simulateError=1` is present
+
+Important:
+
+- Responses are simulated locally
+- No real HTTP request is made
+- No Lambda Function URL is configured yet
 
 ## Documentation
 
@@ -80,4 +100,4 @@ Notes:
 
 ## Next Planned Phase
 
-The exact recommended next step is to start Phase 2 from the implementation plan: create the local frontend shell without backend integration.
+The exact recommended next step is to start Phase 3 from the implementation plan: implement the local Lambda handler with a fixed response and no Bedrock integration yet.

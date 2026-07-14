@@ -166,6 +166,17 @@ Validation required:
 Manual user action expected:
 No.
 
+Current status:
+- Completed on branch `feature/frontend-shell`.
+
+Validation performed:
+- Local static file review
+- `pytest` checks for HTML structure, JavaScript syntax, success flow, error flow, loading reset, and safe text rendering
+- Browser automation against a local HTTP server using Playwright already available in the environment
+
+Deviation from original plan:
+- Added lightweight browser automation through existing tooling to validate the frontend behavior more thoroughly without introducing new project dependencies.
+
 ### Phase 3. Local Lambda handler with fixed response
 
 Objective:
