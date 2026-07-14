@@ -4,6 +4,19 @@ This document describes the intended architecture for `aws-cloud-ai-web`.
 
 Status: planned only. Nothing described here has been deployed yet.
 
+## Current Local Frontend Architecture
+
+This is the only implemented architecture as of Phase 2:
+
+```text
+User
+  -> Local static HTML page
+  -> Plain JavaScript form handling
+  -> Simulated in-browser response
+```
+
+No backend call, AWS resource, or network integration exists yet.
+
 ## Planned Request Flow
 
 ```text

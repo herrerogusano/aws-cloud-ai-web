@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pregunta a la IA</title>
+    <meta
+        name="description"
+        content="Frontend local para probar la experiencia de preguntar a una IA antes de integrar AWS Lambda y Amazon Bedrock."
+    >
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <main class="shell" aria-labelledby="page-title">
+        <section class="hero">
+            <p class="eyebrow">aws-cloud-ai-web</p>
+            <h1 id="page-title">Pregunta a la IA</h1>
+            <p class="intro">
+                Escribe una pregunta y prueba la experiencia local de la aplicacion antes de
+                conectar AWS Lambda y Amazon Bedrock.
+            </p>
+            <p class="local-note">
+                Esta fase funciona solo en local. La respuesta actual es simulada y no hace
+                ninguna peticion de red.
+            </p>
+        </section>
+
+        <section class="workspace" aria-label="Simulador local de preguntas">
+            <form id="question-form" class="panel form-panel" novalidate>
+                <div class="panel-heading">
+                    <h2>Tu pregunta</h2>
+                    <p>Usa una sola pregunta por envio. Maximo 1.000 caracteres.</p>
+                </div>
+
+                <label class="field-label" for="question-input">Escribe tu pregunta</label>
+                <textarea
+                    id="question-input"
+                    name="question"
+                    rows="7"
+                    maxlength="1000"
+                    autocomplete="off"
+                    spellcheck="true"
+                    aria-describedby="question-help question-counter"
+                ></textarea>
+
+                <div class="field-meta">
+                    <p id="question-help" class="helper-text">
+                        La integracion real llegara en una fase posterior. Ahora mismo la respuesta
+                        se genera de forma simulada.
+                    </p>
+                    <p id="question-counter" class="counter" aria-live="polite">0 / 1000</p>
+                </div>
+
+                <div class="actions">
+                    <button id="submit-button" type="submit">Enviar pregunta</button>
+                    <p
+                        id="loading-indicator"
+                        class="loading"
+                        role="status"
+                        aria-live="polite"
+                        hidden
+                    >
+                        Pensando...
+                    </p>
+                </div>
+            </form>
+
+            <section class="panel output-panel" aria-labelledby="response-title">
+                <div class="panel-heading">
+                    <h2 id="response-title">Respuesta</h2>
+                    <p>Vista previa del comportamiento local del frontend.</p>
+                </div>
+
+                <div
+                    id="response-message"
+                    class="feedback response"
+                    role="status"
+                    aria-live="polite"
+                    hidden
+                ></div>
+
+                <div
+                    id="error-message"
+                    class="feedback error"
+                    role="alert"
+                    aria-live="assertive"
+                    hidden
+                ></div>
+            </section>
+        </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
