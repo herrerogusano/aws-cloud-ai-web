@@ -4,13 +4,13 @@
 
 ## Current Status
 
-The repository now includes the local frontend shell for Phase 2.
+The repository now includes the local frontend shell and the local Lambda handler for Phase 3.
 
 - Repository structure and Python tooling are prepared.
 - A local frontend exists in `frontend/` using plain HTML, CSS, and JavaScript.
-- The current frontend validates input, shows a loading state, returns a simulated response, and can simulate an error.
-- No backend, Lambda handler, AWS infrastructure, or GitHub Actions workflow has been implemented yet.
-- Nothing has been deployed and no AWS resources have been created for this project.
+- A local Lambda handler exists in `backend/` and returns a fixed JSON response.
+- The frontend and backend are both implemented locally, but they are not connected to each other yet.
+- No AWS infrastructure has been deployed and no AWS resources have been created for this project.
 
 ## Planned Architecture
 
@@ -69,6 +69,14 @@ Then open `http://127.0.0.1:8000`.
 
 For local error-state testing, open `http://127.0.0.1:8000/?simulateError=1`.
 
+To invoke the backend directly without AWS tooling:
+
+```bash
+python -c "from backend.handler import lambda_handler; event={'version':'2.0','requestContext':{'http':{'method':'POST'}},'isBase64Encoded':False,'body':'{\"question\":\"¿Qué es AWS Lambda?\"}'}; print(lambda_handler(event, None))"
+```
+
+Useful test event fixtures are available in `events/`.
+
 Notes:
 
 - `mypy` was selected instead of Pyright to keep the initial toolchain Python-native and simple to run through `uv`.
@@ -89,10 +97,26 @@ Important:
 - No real HTTP request is made
 - No Lambda Function URL is configured yet
 
+## Current Backend Functionality
+
+- Accepts local Lambda-style events
+- Supports `POST` requests only
+- Parses JSON request bodies
+- Validates the `question` field with a maximum of 1000 characters
+- Returns a fixed JSON answer that clearly indicates the response is temporary
+- Returns consistent JSON errors with status codes and CORS headers
+
+Important:
+
+- The backend response is still fixed
+- No Amazon Bedrock call is made
+- The frontend is not connected to this backend yet
+
 ## Documentation
 
 - Implementation plan: [docs/implementation-plan.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/implementation-plan.md)
 - Planned architecture: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
+- Local API contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
 - Planned deployment notes: [docs/deployment.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/deployment.md)
 - Planned teardown notes: [docs/teardown.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/teardown.md)
 - Resource inventory: [docs/aws-resources.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/aws-resources.md)
@@ -100,4 +124,4 @@ Important:
 
 ## Next Planned Phase
 
-The exact recommended next step is to start Phase 3 from the implementation plan: implement the local Lambda handler with a fixed response and no Bedrock integration yet.
+The exact recommended next step is to start Phase 5 from the implementation plan: connect the frontend to the local backend contract while keeping the backend response fixed.

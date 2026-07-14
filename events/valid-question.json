@@ -1,0 +1,12 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/",
+  "requestContext": {
+    "http": {
+      "method": "POST"
+    }
+  },
+  "isBase64Encoded": false,
+  "body": "{\"question\":\"¿Qué es AWS Lambda?\"}"
+}

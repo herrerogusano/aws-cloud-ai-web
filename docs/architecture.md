@@ -4,18 +4,25 @@ This document describes the intended architecture for `aws-cloud-ai-web`.
 
 Status: planned only. Nothing described here has been deployed yet.
 
-## Current Local Frontend Architecture
+## Current Local Architecture
 
-This is the only implemented architecture as of Phase 2:
+This is the implemented local architecture as of Phase 3:
 
 ```text
 User
   -> Local static HTML page
   -> Plain JavaScript form handling
   -> Simulated in-browser response
+
+Local validation
+  -> Python Lambda handler
+  -> Fixed JSON response
 ```
 
-No backend call, AWS resource, or network integration exists yet.
+The frontend and backend currently exist as separate local pieces.
+
+- No frontend-to-backend connection exists yet.
+- No AWS resource or deployed endpoint exists yet.
 
 ## Planned Request Flow
 
@@ -90,7 +97,14 @@ Current planned contract:
 }
 ```
 
-This contract is intentionally provisional until backend implementation starts.
+Current local backend implementation already follows the same general response shape:
+
+- `POST` requests only
+- JSON request body with `question`
+- JSON response body with `answer`
+- JSON error bodies with status codes
+
+Detailed local contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
 
 ## Planned Deployment Flow
 

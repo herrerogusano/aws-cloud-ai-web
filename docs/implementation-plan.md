@@ -199,6 +199,22 @@ Validation required:
 Manual user action expected:
 No.
 
+Current status:
+- Completed on branch `feature/lambda-basic-handler`.
+
+Validation performed:
+- `uv run pytest`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy .`
+- Direct Python invocation of `backend.handler.lambda_handler`
+
+Deviation from original plan:
+- Added reusable response and validation helpers to keep the Lambda response contract consistent without introducing any framework.
+
+Manual checks still pending:
+- `sam validate`, `sam build`, and `sam local invoke` are blocked until AWS SAM CLI is installed locally.
+
 ### Phase 4. AWS SAM backend infrastructure
 
 Objective:
