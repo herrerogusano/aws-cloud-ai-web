@@ -1,0 +1,43 @@
+[project]
+name = "aws-cloud-ai-web"
+version = "0.1.0"
+description = "Project foundation for a serverless AWS + Bedrock portfolio application."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.0",
+    "pytest>=8.4.0",
+    "ruff>=0.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["backend", "tests"]
+exclude = [
+    "^\\.venv/",
+    "^\\.aws-sam/",
+]
