@@ -2,6 +2,14 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Planned serverless infrastructure for aws-cloud-ai-web.
-  This template is intentionally minimal during the project foundation phase.
+  Local backend definition for validation and later SAM-based development.
 
-Resources: {}
+Resources:
+  QuestionHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: backend.handler.lambda_handler
+      Runtime: python3.13
+      Timeout: 10
+      MemorySize: 128
