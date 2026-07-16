@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Minimal backend infrastructure for aws-cloud-ai-web with a public Lambda Function URL.
+  Backend and static frontend infrastructure for aws-cloud-ai-web.
 
 Resources:
   QuestionHandlerFunction:
@@ -47,7 +47,8 @@ Resources:
         AuthType: NONE
         Cors:
           AllowOrigins:
-            - "*"
+            - http://localhost:8000
+            - !Sub http://${FrontendWebsiteBucket}.s3-website-${AWS::Region}.amazonaws.com
           AllowHeaders:
             - Content-Type
           AllowMethods:
@@ -74,6 +75,43 @@ Resources:
         - Key: Environment
           Value: portfolio
 
+  FrontendWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: aws-cloud-ai-web-herrerogusano-frontend
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      Tags:
+        - Key: Project
+          Value: aws-cloud-ai-web
+        - Key: Component
+          Value: frontend
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Environment
+          Value: portfolio
+
+  FrontendWebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendWebsiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadFrontendAssets
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${FrontendWebsiteBucket}/*
+
 Outputs:
   BackendStackName:
     Description: CloudFormation stack name for the backend deployment.
@@ -90,3 +128,11 @@ Outputs:
   QuestionHandlerLogGroupName:
     Description: CloudWatch log group used by the backend Lambda function.
     Value: !Ref QuestionHandlerLogGroup
+
+  FrontendWebsiteBucketName:
+    Description: S3 bucket used for the public static frontend.
+    Value: !Ref FrontendWebsiteBucket
+
+  FrontendWebsiteUrl:
+    Description: Public S3 static website URL for the frontend.
+    Value: !GetAtt FrontendWebsiteBucket.WebsiteURL

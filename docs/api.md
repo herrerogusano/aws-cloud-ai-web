@@ -1,6 +1,6 @@
 # API Contract
 
-This document describes the current request and response contract between the local frontend and the deployed backend.
+This document describes the current request and response contract between the deployed frontend and the deployed backend.
 
 Status: implemented for Phase 6.
 
@@ -12,7 +12,7 @@ Status: implemented for Phase 6.
 - Path: `/`
 - Request content type: `application/json`
 
-The local frontend is connected to this deployed endpoint.
+The public frontend and the local development frontend are connected to this deployed endpoint.
 
 ## Request Body
 

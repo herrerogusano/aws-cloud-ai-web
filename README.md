@@ -1,25 +1,27 @@
 # aws-cloud-ai-web
 
-`aws-cloud-ai-web` is a serverless portfolio project built in phases. The current application runs a local static frontend that sends real questions to a deployed AWS Lambda backend through a public Lambda Function URL, and the backend now generates the answer through Amazon Bedrock.
+`aws-cloud-ai-web` is a serverless portfolio project built in phases. The current application is publicly available as a static website hosted in Amazon S3, sends questions to a public AWS Lambda Function URL, and receives real answers generated through Amazon Bedrock.
 
 ## Current Status
 
-Phase 6 is complete as of July 16, 2026.
+The application is live and the repository now includes GitHub Actions workflows for Pull Request validation and automatic frontend deployment to S3 on pushes to `main`.
 
 - Repository structure and Python tooling are in place.
 - The frontend lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
+- The frontend is deployed publicly through an S3 static website bucket in `eu-west-1`.
 - The backend Lambda is deployed in `eu-west-1` through AWS SAM.
-- The frontend performs a real `POST` request to the deployed Function URL.
+- The public frontend performs a real `POST` request to the deployed Function URL.
 - The backend calls Amazon Bedrock through the Converse API.
 - The public API contract remains `{"answer":"..."}` on success.
-- The frontend is still local only.
-- There is still no S3 frontend deployment.
-- There is still no CI/CD workflow in this phase.
+- Pull Requests to `main` are validated by GitHub Actions.
+- Frontend deployment to the existing S3 website bucket is automated through GitHub Actions OIDC.
+- Backend deployment still remains manual through AWS SAM.
 
 ## Current Implemented Architecture
 
 ```text
-Local browser frontend
+User browser
+  -> S3 static website
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
@@ -27,6 +29,18 @@ Local browser frontend
 ```
 
 More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
+
+## Public Frontend
+
+Current public website URL:
+
+- `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
+
+Important limitation:
+
+- this S3 static website endpoint is `HTTP`, not `HTTPS`
+- this is acceptable for the current learning phase
+- a future improvement could place CloudFront in front of the bucket to provide HTTPS, but that is explicitly out of scope for the current phase
 
 ## Technology Choices
 
@@ -40,11 +54,30 @@ More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-clou
 - Public backend endpoint: Lambda Function URL
 - LLM provider: Amazon Bedrock
 - Selected Bedrock model profile: `eu.amazon.nova-micro-v1:0`
-- Planned frontend hosting: Amazon S3
-- Planned CI/CD: GitHub Actions
+- Frontend hosting: Amazon S3 static website hosting
+- CI/CD: GitHub Actions for PR validation and frontend deployment
 - Git workflow: short-lived branches and Pull Requests
 - Commit style: Conventional Commits
 - AWS region: `eu-west-1`
+
+## Frontend Configuration
+
+The frontend reads the backend URL from `frontend/config.js`.
+
+Current configuration decision:
+
+- `frontend/config.js` is committed with the public Lambda Function URL
+- the Function URL is configuration, not a secret
+- the URL is not duplicated across frontend files
+- `frontend/config.example.js` is a local template and is excluded from the public S3 sync
+
+Configuration shape:
+
+```javascript
+window.APP_CONFIG = {
+    apiUrl: "https://example.lambda-url.eu-west-1.on.aws/",
+};
+```
 
 ## Bedrock Configuration
 
@@ -62,14 +95,6 @@ BEDROCK_MAX_TOKENS=500
 BEDROCK_TEMPERATURE=0.3
 ```
 
-Model selection summary:
-
-- `eu.amazon.nova-micro-v1:0` is active in `eu-west-1`
-- it supports the Converse API
-- it was successfully invoked from the current AWS account before implementation
-- it is a fast and relatively inexpensive text model suited to a simple interactive portfolio exercise
-- it uses an inference profile, so IAM must allow the profile plus the linked foundation-model ARNs
-
 ## Local Prerequisites
 
 - Python 3.13
@@ -77,26 +102,6 @@ Model selection summary:
 - Git
 - AWS CLI
 - AWS SAM CLI
-
-## Frontend Configuration
-
-The frontend reads the backend URL from `frontend/config.js`.
-
-- `frontend/config.js` is committed in this learning phase because the Function URL is already public and is not a secret.
-- `frontend/config.example.js` provides the safe template shape.
-- The URL is still treated as environment-specific configuration and should not be scattered through app logic.
-
-Current committed Function URL:
-
-- `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
-
-Configuration shape:
-
-```javascript
-window.APP_CONFIG = {
-    apiUrl: "https://example.lambda-url.eu-west-1.on.aws/",
-};
-```
 
 ## Development Commands
 
@@ -119,11 +124,46 @@ If Python dependencies change and SAM must package them, refresh the deployment 
 uv export --format requirements-txt --no-dev --output-file requirements.txt
 ```
 
-To retrieve deployed stack outputs:
+## Manual Deployment
+
+Infrastructure update:
+
+```bash
+sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
+```
+
+Frontend asset sync:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend
+```
+
+To retrieve deployed outputs:
 
 ```bash
 sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 ```
+
+## GitHub Actions Deployment
+
+The repository includes two workflow files:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy-frontend.yml`
+
+Implemented behavior:
+
+- Pull Requests targeting `main` run `uv sync --frozen`, Ruff, `mypy`, `pytest`, `sam validate`, and `sam build`
+- pushes to `main` rerun validation, assume an AWS role through GitHub OIDC, and deploy `frontend/` with `aws s3 sync --delete`
+- the frontend deployment workflow does not deploy the backend Lambda
+
+Required GitHub repository variables:
+
+- `AWS_REGION=eu-west-1`
+- `AWS_FRONTEND_BUCKET=aws-cloud-ai-web-herrerogusano-frontend`
+- `AWS_DEPLOY_ROLE_ARN=<GitHub OIDC deployment role ARN>`
+
+Bootstrap IAM for the workflow is defined separately in `bootstrap/github-frontend-deploy-iam.yaml`.
 
 ## Current Frontend Functionality
 
@@ -136,6 +176,7 @@ sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 - Shows loading, success, and error states
 - Renders backend text safely with `textContent`
 - Preserves the current question after backend or network errors
+- Works from both the public S3 website origin and local development origin
 
 ## Current Backend Functionality
 
@@ -148,43 +189,26 @@ sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 - Logs Bedrock start, completion, failure category, duration, model id, and request id
 - Uses IAM-based AWS authentication only
 
-Important:
-
-- No external API key is used
-- No streaming exists in this phase
-- No chat history exists in this phase
-- No frontend S3 deployment exists yet
-- No CI/CD workflow exists yet
-
-## Deployed Backend Endpoint
-
-Current environment-specific Function URL:
-
-- `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
-
-Example request:
-
-```bash
-curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What is AWS Lambda?"}'
-```
-
 ## Cost Warning
 
-Amazon Bedrock usage is not guaranteed to be free.
+Expected low-volume costs should stay small, but they are not guaranteed to be zero.
 
-- This phase uses `Amazon Nova Micro` because it is fast and comparatively low-cost for small text requests.
-- Keep testing low-volume and intentional.
-- Avoid repeated integration calls and load testing.
-- Check the official AWS Nova pricing page before heavier usage.
+Relevant cost sources:
+
+- S3 storage
+- S3 requests
+- Lambda invocations
+- CloudWatch logs
+- Bedrock inference
 
 ## Security Limitations
 
-- The Function URL is public and unauthenticated in this phase
+- the S3 website bucket is public-read by design for static asset delivery
+- every file uploaded to that bucket should be considered public
+- the Function URL is public and unauthenticated in this phase
 - CORS is not authentication or authorization
-- The backend trusts AWS IAM for Bedrock access, not an app secret
-- This setup is acceptable for a learning exercise, not for sensitive production data
+- the backend trusts AWS IAM for Bedrock access, not an app secret
+- the public website uses HTTP because S3 static website hosting does not provide HTTPS directly
 
 ## Validation Summary
 
@@ -197,11 +221,13 @@ Verified in this phase:
 - `uv run mypy .`
 - `sam validate`
 - `sam build`
-- Bedrock model availability and account access in `eu-west-1`
-- Stack update preview and deploy of the existing backend stack
-- Direct Function URL smoke test with a real Bedrock answer
-- Local frontend browser verification with empty-input validation, loading state, generated answer, second request, and clean browser console
-- CloudWatch log verification for Bedrock start and completion events
+- local frontend verification with final copy and real Bedrock answer
+- stack update preview and deploy of the existing backend stack
+- public S3 website asset sync
+- public browser verification against the S3 website URL
+- CORS preflight verification from the S3 website origin
+- responsive mobile-width verification on the public website
+- local workflow configuration tests for CI and frontend deployment
 
 ## Documentation
 
@@ -215,4 +241,4 @@ Verified in this phase:
 
 ## Next Planned Phase
 
-The exact recommended next step is Phase 7 from the implementation plan: deploy the static frontend to Amazon S3 while keeping the Bedrock-backed backend and the current response contract stable.
+The exact recommended next step after frontend CI/CD is automatic backend deployment through AWS SAM, keeping the same least-privilege and review-first approach.
