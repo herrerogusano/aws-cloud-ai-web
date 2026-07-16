@@ -99,8 +99,8 @@ Error response:
 - Use short-lived branches and Pull Requests
 - Run local quality checks first
 - Validate Pull Requests in GitHub Actions with the same checks used locally
-- Deploy the frontend automatically only after pushes to `main`
-- Keep backend deployment manual until a later phase
+- Deploy the backend stack and frontend automatically only after pushes to `main`
+- Keep manual deployment documented as a fallback
 
 ## AWS Cost Precautions
 
@@ -263,44 +263,53 @@ Manual user action expected:
 - approve the Pull Request merge once CI is green
 
 Current status:
-- Implemented on branch `ci/github-actions-frontend-deployment`
-- final completion depends on one real Pull Request CI run succeeding
+- Completed on July 16, 2026 on branch `ci/github-actions-frontend-deployment`.
+
+Production validation result:
+- Pull Request `#6` ran the real GitHub Actions CI workflow successfully before merge
 
 ### Phase 9. Automatic deployment
 
 Objective:
-Automate frontend deployment after merges to the main branch.
+Automate production deployment after merges to the main branch.
 
 Main tasks:
-- create `.github/workflows/deploy-frontend.yml`
+- create a production deployment workflow
 - validate before deployment
 - authenticate to AWS with GitHub OIDC
+- deploy the backend stack through AWS SAM
 - synchronize `frontend/` to the existing S3 website bucket
-- keep backend deployment manual
+- keep backend deployment ordered before frontend synchronization
 
 Expected result:
-Every push to `main`, including a merged Pull Request, can publish the current frontend safely to S3.
+Every push to `main`, including a merged Pull Request, can deploy the backend stack and publish the current frontend safely.
 
 Deployment design:
 - trigger on `push` to `main`
 - support `workflow_dispatch` for controlled reruns
 - use `aws-actions/configure-aws-credentials`
-- assume a dedicated role restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+- assume a dedicated backend deployment role restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+- pass a separate CloudFormation execution role to `sam deploy`
+- re-authenticate with the frontend deployment role before `aws s3 sync`
+- deploy with `sam deploy` against the existing `aws-cloud-ai-web-backend` stack
 - deploy with `aws s3 sync frontend/ s3://aws-cloud-ai-web-herrerogusano-frontend --delete`
 - exclude `config.example.js`, `.env*`, source maps, and OS metadata files
 - reapply no-cache headers to `index.html` and `config.js`
+- run a backend smoke check without invoking Bedrock
 - run a static website smoke check without invoking Bedrock
 
 Bootstrap decision:
 - use a separate bootstrap template at `bootstrap/github-frontend-deploy-iam.yaml`
-- keep the OIDC provider and deployment role out of the normal application deployment workflow
+- keep the OIDC provider, GitHub deployment roles, and CloudFormation execution role out of the normal application deployment workflow
+- keep frontend and backend deployment roles separate
 
 Manual user action expected:
-- approve creation of the GitHub OIDC provider and deployment role
-- merge the Pull Request to trigger the first production deployment
+- approve creation or update of the GitHub deployment bootstrap roles
+- merge the Pull Request to trigger the first full production deployment
 
 Current status:
-- Implemented on branch `ci/github-actions-frontend-deployment`
+- Frontend-only production deployment completed on July 16, 2026 on branch `ci/github-actions-frontend-deployment`.
+- Full backend-plus-frontend deployment is being implemented on branch `ci/backend-sam-deployment`.
 - final completion depends on one real merge to `main` succeeding
 
 ### Phase 10. Portfolio documentation and project closure

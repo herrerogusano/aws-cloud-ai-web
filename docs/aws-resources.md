@@ -1,6 +1,6 @@
 # AWS Resource Inventory
 
-Status: application resources remain deployed in `eu-west-1`, and GitHub Actions frontend deployment bootstrap resources were added on July 16, 2026.
+Status: application resources remain deployed in `eu-west-1`, and the GitHub Actions deployment bootstrap now covers separate frontend, backend, and CloudFormation execution roles.
 
 ## Current Inventory
 
@@ -17,6 +17,8 @@ Status: application resources remain deployed in `eu-west-1`, and GitHub Actions
 | CloudFormation bootstrap stack | `aws-cloud-ai-web-github-frontend-bootstrap` | Created | Separate bootstrap stack for GitHub OIDC and frontend deployment IAM |
 | GitHub OIDC provider | `arn:aws:iam::344774635844:oidc-provider/token.actions.githubusercontent.com` | Created | Shared AWS account-level identity provider for GitHub Actions |
 | GitHub frontend deploy role | `aws-cloud-ai-web-github-frontend-deploy` | Created | Dedicated OIDC-assumed role for frontend-only S3 deployment |
+| GitHub backend deploy role | `aws-cloud-ai-web-github-backend-deploy` | Created | Dedicated OIDC-assumed role for SAM and CloudFormation deployment orchestration |
+| CloudFormation execution role | `aws-cloud-ai-web-cloudformation-execution` | Created | Role assumed by CloudFormation during `sam deploy` |
 
 ## Resource Notes
 
@@ -136,6 +138,48 @@ Status: application resources remain deployed in `eu-west-1`, and GitHub Actions
   - IAM modification
   - Bedrock invocation
 
+### GitHub backend deploy role
+
+- Region scope: account-level IAM resource
+- Created through IaC: yes, via the bootstrap stack
+- Role name:
+  - `aws-cloud-ai-web-github-backend-deploy`
+- Trust restriction:
+  - `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+- Purpose:
+  - allow GitHub Actions to deploy the existing stack through AWS SAM and CloudFormation without giving it direct broad resource permissions
+- Granted permissions:
+  - stack-scoped CloudFormation change-set actions
+  - read access to stack events and outputs
+  - upload access to the private SAM artifact bucket
+  - `iam:PassRole` only for the CloudFormation execution role
+- Explicitly not granted:
+  - direct S3 website deployment
+  - direct Lambda resource mutation
+  - direct IAM mutation on application roles
+  - modification of the OIDC provider or GitHub deployment roles
+
+### CloudFormation execution role
+
+- Region scope: account-level IAM resource
+- Created through IaC: yes, via the bootstrap stack
+- Role name:
+  - `aws-cloud-ai-web-cloudformation-execution`
+- Trust:
+  - `cloudformation.amazonaws.com`
+- Purpose:
+  - let CloudFormation apply the existing SAM stack update with project-scoped permissions
+- Granted permissions:
+  - Lambda function, Function URL, and permission updates for `aws-cloud-ai-web-backend-handler`
+  - CloudWatch Logs management for `/aws/lambda/aws-cloud-ai-web-backend-handler`
+  - frontend bucket infrastructure management for the stack-managed S3 website bucket
+  - limited IAM role management for the stack-managed Lambda execution role prefix
+  - `iam:PassRole` only from the stack-managed Lambda execution role to `lambda.amazonaws.com`
+- Explicitly not granted:
+  - modification of the GitHub OIDC provider
+  - modification of GitHub deployment roles
+  - unrelated stacks or unrelated buckets
+
 ## What Phase 7 Changed
 
 - added the S3 static website bucket
@@ -143,12 +187,13 @@ Status: application resources remain deployed in `eu-west-1`, and GitHub Actions
 - updated Function URL CORS origins for the public website and localhost development
 - synchronized public frontend assets to the S3 bucket
 
-## What Phase 8-9 Bootstrap Changed
+## What Phase 8-10 Bootstrap Changed
 
 - added a separate bootstrap stack for GitHub Actions OIDC and the frontend deployment role
 - created the shared GitHub OIDC provider in the AWS account
 - created a repository-specific `main`-branch deployment role for S3 frontend sync only
-- configured GitHub repository variables for AWS region, frontend bucket, and deployment role ARN
+- expanded the bootstrap stack with a backend deployment role and a CloudFormation execution role
+- GitHub repository variables now cover region, stack name, artifact bucket, frontend bucket, and separate backend/frontend role ARNs plus the CloudFormation execution role ARN
 
 ## What Phase 7 Did Not Create
 
@@ -159,4 +204,3 @@ Status: application resources remain deployed in `eu-west-1`, and GitHub Actions
 - No database
 - No new Bedrock resources
 - No GitHub-stored permanent AWS access keys
-- No backend deployment role for GitHub Actions yet
