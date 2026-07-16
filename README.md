@@ -4,7 +4,7 @@
 
 ## Current Status
 
-Phase 7 is complete as of July 16, 2026.
+The application is live and the repository now includes GitHub Actions workflows for Pull Request validation and automatic frontend deployment to S3 on pushes to `main`.
 
 - Repository structure and Python tooling are in place.
 - The frontend lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
@@ -13,7 +13,9 @@ Phase 7 is complete as of July 16, 2026.
 - The public frontend performs a real `POST` request to the deployed Function URL.
 - The backend calls Amazon Bedrock through the Converse API.
 - The public API contract remains `{"answer":"..."}` on success.
-- There is still no CI/CD workflow in this phase.
+- Pull Requests to `main` are validated by GitHub Actions.
+- Frontend deployment to the existing S3 website bucket is automated through GitHub Actions OIDC.
+- Backend deployment still remains manual through AWS SAM.
 
 ## Current Implemented Architecture
 
@@ -53,7 +55,7 @@ Important limitation:
 - LLM provider: Amazon Bedrock
 - Selected Bedrock model profile: `eu.amazon.nova-micro-v1:0`
 - Frontend hosting: Amazon S3 static website hosting
-- Planned CI/CD: GitHub Actions
+- CI/CD: GitHub Actions for PR validation and frontend deployment
 - Git workflow: short-lived branches and Pull Requests
 - Commit style: Conventional Commits
 - AWS region: `eu-west-1`
@@ -142,6 +144,27 @@ To retrieve deployed outputs:
 sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 ```
 
+## GitHub Actions Deployment
+
+The repository includes two workflow files:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy-frontend.yml`
+
+Implemented behavior:
+
+- Pull Requests targeting `main` run `uv sync --frozen`, Ruff, `mypy`, `pytest`, `sam validate`, and `sam build`
+- pushes to `main` rerun validation, assume an AWS role through GitHub OIDC, and deploy `frontend/` with `aws s3 sync --delete`
+- the frontend deployment workflow does not deploy the backend Lambda
+
+Required GitHub repository variables:
+
+- `AWS_REGION=eu-west-1`
+- `AWS_FRONTEND_BUCKET=aws-cloud-ai-web-herrerogusano-frontend`
+- `AWS_DEPLOY_ROLE_ARN=<GitHub OIDC deployment role ARN>`
+
+Bootstrap IAM for the workflow is defined separately in `bootstrap/github-frontend-deploy-iam.yaml`.
+
 ## Current Frontend Functionality
 
 - Accepts one question in a multiline text area
@@ -204,6 +227,7 @@ Verified in this phase:
 - public browser verification against the S3 website URL
 - CORS preflight verification from the S3 website origin
 - responsive mobile-width verification on the public website
+- local workflow configuration tests for CI and frontend deployment
 
 ## Documentation
 
@@ -217,4 +241,4 @@ Verified in this phase:
 
 ## Next Planned Phase
 
-The exact recommended next step is Phase 8 from the implementation plan: add Pull Request CI in GitHub Actions for lint, format, tests, and type checking.
+The exact recommended next step after frontend CI/CD is automatic backend deployment through AWS SAM, keeping the same least-privilege and review-first approach.

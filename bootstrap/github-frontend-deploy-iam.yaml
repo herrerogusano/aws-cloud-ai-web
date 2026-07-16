@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bootstrap IAM resources for GitHub Actions OIDC authentication and S3-only
+  frontend deployment for aws-cloud-ai-web.
+
+Parameters:
+  GitHubRepositoryOwner:
+    Type: String
+    Description: GitHub repository owner or organization.
+    Default: herrerogusano
+
+  GitHubRepositoryName:
+    Type: String
+    Description: GitHub repository name.
+    Default: aws-cloud-ai-web
+
+  FrontendBucketName:
+    Type: String
+    Description: Existing S3 bucket used for frontend deployment.
+    Default: aws-cloud-ai-web-herrerogusano-frontend
+
+  ExistingGitHubOidcProviderArn:
+    Type: String
+    Description: >
+      Existing GitHub OIDC provider ARN. Leave empty to create
+      token.actions.githubusercontent.com in this stack.
+    Default: ""
+
+Conditions:
+  CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, ""]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateGitHubOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  GitHubFrontendDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: aws-cloud-ai-web-github-frontend-deploy
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepositoryOwner}/${GitHubRepositoryName}:ref:refs/heads/main
+      Policies:
+        - PolicyName: aws-cloud-ai-web-frontend-sync
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListFrontendBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !Sub arn:aws:s3:::${FrontendBucketName}
+              - Sid: SyncFrontendObjects
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub arn:aws:s3:::${FrontendBucketName}/*
+      Tags:
+        - Key: Project
+          Value: aws-cloud-ai-web
+        - Key: Purpose
+          Value: github-frontend-deploy
+
+Outputs:
+  GitHubOidcProviderArn:
+    Description: GitHub OIDC provider ARN used by the deployment role.
+    Value: !If
+      - CreateGitHubOidcProvider
+      - !Ref GitHubOidcProvider
+      - !Ref ExistingGitHubOidcProviderArn
+
+  GitHubFrontendDeployRoleArn:
+    Description: Role ARN for GitHub Actions frontend deployment.
+    Value: !GetAtt GitHubFrontendDeployRole.Arn

@@ -1,15 +1,17 @@
 # Teardown Notes
 
-Status: ready for the deployed Phase 7 frontend and backend.
+Status: ready for the deployed frontend and backend, with separate teardown notes for the GitHub Actions frontend deployment bootstrap.
 
 ## Safe Teardown Order
 
-1. Empty the frontend website bucket.
-2. Delete the SAM stack.
-3. Confirm the bucket and bucket policy are gone.
-4. Confirm the website endpoint no longer serves content.
-5. Confirm the Lambda, Function URL, IAM role, and log group are removed.
-6. Review whether the SAM managed artifact bucket should remain.
+1. Disable or remove GitHub frontend deployment configuration if it is no longer needed.
+2. Empty the frontend website bucket.
+3. Delete the SAM stack.
+4. Delete the GitHub frontend bootstrap stack if this repository no longer needs automated frontend deployment.
+5. Confirm the bucket and bucket policy are gone.
+6. Confirm the website endpoint no longer serves content.
+7. Confirm the Lambda, Function URL, IAM role, and log group are removed.
+8. Review whether the SAM managed artifact bucket and GitHub OIDC provider should remain.
 
 Do not start teardown now if the frontend is still needed for later phases.
 
@@ -40,6 +42,12 @@ This is the preferred teardown path because the frontend and backend are managed
 - IAM execution role created for the function
 - CloudWatch log group `/aws/lambda/aws-cloud-ai-web-backend-handler`
 - CloudFormation stack `aws-cloud-ai-web-backend`
+- GitHub repository variables:
+  - `AWS_REGION`
+  - `AWS_FRONTEND_BUCKET`
+  - `AWS_DEPLOY_ROLE_ARN`
+- CloudFormation bootstrap stack `aws-cloud-ai-web-github-frontend-bootstrap`
+- GitHub frontend deployment role `aws-cloud-ai-web-github-frontend-deploy` if no other project needs it
 
 ## Additional Manual Review
 
@@ -54,6 +62,26 @@ Stack deletion also does not necessarily remove all Bedrock account-level state.
 - model access settings enabled manually
 - Marketplace subscriptions accepted manually
 - billing or budget settings related to future testing
+
+The GitHub OIDC provider is an account-level IAM resource and may be shared by other repositories. Do not remove it automatically just because this project is being torn down. Check first whether any other repository or workflow still relies on:
+
+- `arn:aws:iam::344774635844:oidc-provider/token.actions.githubusercontent.com`
+
+## Removing The GitHub Frontend Bootstrap Stack
+
+If this repository no longer needs automatic frontend deployment, remove the bootstrap stack:
+
+```bash
+aws cloudformation delete-stack --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
+```
+
+Then confirm it is gone:
+
+```bash
+aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
+```
+
+If the OIDC provider is shared with another bootstrap stack or another repository, keep it in place and only remove the repository-specific role and GitHub variables.
 
 ## Verification After Deletion
 
@@ -87,9 +115,16 @@ Check that the log group is gone:
 aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aws-cloud-ai-web-backend-handler"
 ```
 
+Check that the GitHub repository variables were removed:
+
+- `AWS_REGION`
+- `AWS_FRONTEND_BUCKET`
+- `AWS_DEPLOY_ROLE_ARN`
+
 ## Notes
 
 - the website bucket contains only public static assets in this phase
 - CloudWatch logs may incur small ongoing cost while retained
 - the current log retention is 7 days
 - Bedrock usage charges are request-driven and stop once the endpoint is no longer invoked
+- the GitHub OIDC provider may outlive this project intentionally if other repositories use it

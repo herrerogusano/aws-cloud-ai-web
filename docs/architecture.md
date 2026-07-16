@@ -4,7 +4,7 @@ This document describes the current implemented architecture for `aws-cloud-ai-w
 
 ## Current Architecture
 
-Status: implemented as of Phase 7 on July 16, 2026.
+Status: application flow implemented and repository delivery flow defined as of July 16, 2026.
 
 ```text
 User browser
@@ -23,6 +23,19 @@ Local browser
   -> same Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
+```
+
+Repository delivery flow:
+
+```text
+Feature branch
+  -> Pull Request to main
+  -> GitHub Actions CI
+  -> merge to main
+  -> GitHub Actions frontend deployment
+  -> GitHub OIDC temporary AWS credentials
+  -> aws s3 sync
+  -> S3 static website
 ```
 
 ## Current Components
@@ -65,6 +78,14 @@ Local browser
 - API style: Converse API
 - Selected profile: `eu.amazon.nova-micro-v1:0`
 - Authentication: Lambda execution role only
+
+### Repository delivery
+
+- Pull Request validation is defined in `.github/workflows/ci.yml`
+- Frontend deployment is defined in `.github/workflows/deploy-frontend.yml`
+- GitHub Actions assumes AWS credentials through OIDC only for trusted `main` deployments
+- The frontend deployment role is separate from the Lambda execution role
+- Backend deployment remains manual through AWS SAM in this phase
 
 ## Current API Shape
 
@@ -152,6 +173,8 @@ No broad Bedrock managed policy was attached.
 - the backend remains publicly reachable through a Function URL
 - CORS is not authentication
 - the S3 static website endpoint is HTTP only
+- the deployment workflow receives AWS credentials only on `push` to `main`
+- the CI workflow receives no AWS credentials and no OIDC token
 
 ## Still Not In Scope
 
@@ -161,14 +184,13 @@ No broad Bedrock managed policy was attached.
 - authentication
 - database storage
 - chat history
-- CI/CD
+- automatic backend deployment
 
 ## Planned Next Phase
 
 ```text
-Pull Request
-  -> GitHub Actions
-  -> lint, format, tests, type checking
+main push
+  -> GitHub Actions backend deployment through AWS SAM
 ```
 
-Status: planned only for Phase 8.
+Status: planned only for the next phase.

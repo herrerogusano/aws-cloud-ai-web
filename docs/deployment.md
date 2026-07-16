@@ -1,6 +1,6 @@
 # Deployment Notes
 
-Status: frontend and backend deployed for Phase 7.
+Status: frontend and backend are deployed, and the repository is prepared for GitHub Actions PR validation plus frontend-only deployment to S3.
 
 ## Deployed Scope
 
@@ -64,6 +64,7 @@ A future improvement could add CloudFront for HTTPS, but that is intentionally o
 - valid AWS credentials
 - region configured for `eu-west-1`
 - Python tooling already validated locally
+- GitHub repository admin access for variables and workflow review
 
 ## Local Validation Before Deployment
 
@@ -126,6 +127,102 @@ The script uses `aws s3 sync frontend/ ... --delete` and excludes:
 
 Before using `--delete`, confirm the target bucket is the project frontend bucket and does not contain unrelated files.
 
+## GitHub Actions CI
+
+Pull Request validation is defined in `.github/workflows/ci.yml`.
+
+Trigger:
+
+- `pull_request` targeting `main`
+- `workflow_dispatch`
+
+Permissions:
+
+- `contents: read`
+
+Validation steps:
+
+- `uv sync --frozen`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy .`
+- `uv run pytest`
+- `sam validate`
+- `sam build`
+
+This workflow does not use AWS credentials, does not request OIDC tokens, and does not deploy infrastructure.
+
+## GitHub Actions Frontend Deployment
+
+Frontend deployment is defined in `.github/workflows/deploy-frontend.yml`.
+
+Trigger:
+
+- `push` to `main`
+- `workflow_dispatch`
+
+Concurrency:
+
+- `production-frontend`
+- `cancel-in-progress: false`
+
+Validation-before-deploy behavior:
+
+- reruns the same quality checks as CI
+- fails before authentication if repository variables are missing
+- keeps backend deployment out of scope
+
+Deployment command:
+
+```bash
+aws s3 sync frontend/ s3://$AWS_FRONTEND_BUCKET --delete
+```
+
+Deployment exclusions:
+
+- `config.example.js`
+- `.env`
+- `.env.*`
+- `*.map`
+- `.DS_Store`
+- `Thumbs.db`
+
+Cache behavior:
+
+- `index.html` is re-uploaded with `Cache-Control: no-cache, no-store, must-revalidate`
+- `config.js` is re-uploaded with `Cache-Control: no-cache, no-store, must-revalidate`
+- other static assets keep the default S3 sync behavior because filenames are not hashed yet
+
+Smoke check behavior:
+
+- confirm `index.html`, `styles.css`, `app.js`, and `config.js` exist in S3
+- request the website URL over HTTP
+- confirm the page title and required static assets load
+- do not submit an AI question automatically, so the workflow avoids extra Bedrock calls
+
+## GitHub OIDC Bootstrap
+
+Bootstrap IAM is kept separate from the application stack in:
+
+- `bootstrap/github-frontend-deploy-iam.yaml`
+
+Bootstrap scope:
+
+- create or reuse the account-level GitHub OIDC provider for `https://token.actions.githubusercontent.com`
+- create the repository-specific role `aws-cloud-ai-web-github-frontend-deploy`
+- restrict trust to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+- grant only `s3:ListBucket`, `s3:GetBucketLocation`, `s3:PutObject`, and `s3:DeleteObject` on the frontend bucket
+
+Apply the bootstrap template manually with an administrative AWS identity. Do not run IAM bootstrap from the GitHub deployment workflow itself.
+
+## Required GitHub Repository Variables
+
+- `AWS_REGION=eu-west-1`
+- `AWS_FRONTEND_BUCKET=aws-cloud-ai-web-herrerogusano-frontend`
+- `AWS_DEPLOY_ROLE_ARN=<GitHub OIDC deployment role ARN>`
+
+These values are configuration, not permanent credentials. Do not store `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` in GitHub for this project.
+
 ## Phase 7 Deployment Result
 
 Deployment date:
@@ -168,6 +265,20 @@ Validated successfully in this phase:
 - website serves old copy:
   - refresh with a cache-busting query string or clear browser cache during validation
 
+## Common OIDC And Workflow Errors
+
+- `Could not assume role with OIDC`:
+  - confirm the IAM role trust policy uses `sts.amazonaws.com` as the audience
+  - confirm the `sub` claim is restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+  - confirm the workflow has `permissions: id-token: write`
+- missing repository variable failure:
+  - configure `AWS_REGION`, `AWS_FRONTEND_BUCKET`, and `AWS_DEPLOY_ROLE_ARN`
+- S3 permission failure:
+  - confirm the deployment role points to the correct bucket
+  - confirm the role has bucket-level and object-level permissions for that bucket only
+- wrong bucket deployment:
+  - confirm the configured bucket is the project website bucket before rerunning a deployment
+
 ## Common Public-Access Errors
 
 - public website does not load:
@@ -189,3 +300,4 @@ Validated successfully in this phase:
 - public write is not allowed
 - the Function URL uses `AuthType: NONE`
 - CORS is not authentication
+- the backend is still deployed manually through AWS SAM in this phase

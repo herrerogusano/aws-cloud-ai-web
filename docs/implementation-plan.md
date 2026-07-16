@@ -98,8 +98,9 @@ Error response:
 
 - Use short-lived branches and Pull Requests
 - Run local quality checks first
-- Later add GitHub Actions for lint, format, tests, and type checking
-- Add deployment automation only after infrastructure and application paths are stable
+- Validate Pull Requests in GitHub Actions with the same checks used locally
+- Deploy the frontend automatically only after pushes to `main`
+- Keep backend deployment manual until a later phase
 
 ## AWS Cost Precautions
 
@@ -237,23 +238,70 @@ Objective:
 Add Pull Request validation in GitHub Actions.
 
 Main tasks:
-- create a workflow for lint, format, tests, and type checking
+- create `.github/workflows/ci.yml`
 - reuse the same checks already used locally
-- keep deployment automation out of scope for this phase
+- keep AWS credentials out of Pull Request validation
 
 Expected result:
-Pull Requests receive automatic validation feedback.
+Pull Requests targeting `main` receive automatic validation feedback.
+
+Validation scope:
+- `uv sync --frozen`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy .`
+- `uv run pytest`
+- `sam validate`
+- `sam build`
+
+Workflow decision:
+- trigger on `pull_request` to `main`
+- use `permissions: contents: read`
+- do not request `id-token: write`
 
 Manual user action expected:
-Yes. A remote GitHub repository already exists, so the remaining work is repository workflow configuration.
+- approve the Pull Request merge once CI is green
+
+Current status:
+- Implemented on branch `ci/github-actions-frontend-deployment`
+- final completion depends on one real Pull Request CI run succeeding
 
 ### Phase 9. Automatic deployment
 
 Objective:
-Automate deployment after merges to the main branch.
+Automate frontend deployment after merges to the main branch.
 
-Status:
-- Planned only.
+Main tasks:
+- create `.github/workflows/deploy-frontend.yml`
+- validate before deployment
+- authenticate to AWS with GitHub OIDC
+- synchronize `frontend/` to the existing S3 website bucket
+- keep backend deployment manual
+
+Expected result:
+Every push to `main`, including a merged Pull Request, can publish the current frontend safely to S3.
+
+Deployment design:
+- trigger on `push` to `main`
+- support `workflow_dispatch` for controlled reruns
+- use `aws-actions/configure-aws-credentials`
+- assume a dedicated role restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
+- deploy with `aws s3 sync frontend/ s3://aws-cloud-ai-web-herrerogusano-frontend --delete`
+- exclude `config.example.js`, `.env*`, source maps, and OS metadata files
+- reapply no-cache headers to `index.html` and `config.js`
+- run a static website smoke check without invoking Bedrock
+
+Bootstrap decision:
+- use a separate bootstrap template at `bootstrap/github-frontend-deploy-iam.yaml`
+- keep the OIDC provider and deployment role out of the normal application deployment workflow
+
+Manual user action expected:
+- approve creation of the GitHub OIDC provider and deployment role
+- merge the Pull Request to trigger the first production deployment
+
+Current status:
+- Implemented on branch `ci/github-actions-frontend-deployment`
+- final completion depends on one real merge to `main` succeeding
 
 ### Phase 10. Portfolio documentation and project closure
 
