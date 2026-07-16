@@ -1,12 +1,18 @@
-"""Local AWS Lambda handler with fixed response behavior."""
+"""AWS Lambda handler for the Bedrock-backed question answering flow."""
 
 from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import Mapping
 from typing import Protocol
 
+from backend.bedrock_client import (
+    BedrockInvocationError,
+    generate_answer,
+    load_bedrock_settings,
+)
 from backend.responses import error_response, json_response
 from backend.validation import MAX_QUESTION_LENGTH, ValidationError, validate_question
 
@@ -68,7 +74,7 @@ def parse_event_body(event: Mapping[str, object]) -> dict[str, object]:
         except json.JSONDecodeError as exc:
             raise ValidationError(
                 code="INVALID_JSON",
-                message="El cuerpo debe ser JSON válido.",
+                message="El cuerpo debe ser JSON valido.",
             ) from exc
 
         if not isinstance(parsed_body, dict):
@@ -81,15 +87,7 @@ def parse_event_body(event: Mapping[str, object]) -> dict[str, object]:
 
     raise ValidationError(
         code="INVALID_REQUEST",
-        message="El cuerpo debe ser JSON válido.",
-    )
-
-
-def build_fixed_answer(question: str) -> str:
-    return (
-        "Esta es una respuesta simulada del backend para la pregunta: "
-        f"«{question}». "
-        "La integración con Amazon Bedrock se añadirá en una fase posterior."
+        message="El cuerpo debe ser JSON valido.",
     )
 
 
@@ -111,13 +109,12 @@ def lambda_handler(
         return error_response(
             status_code=405,
             code="METHOD_NOT_ALLOWED",
-            message="Solo se admite el método POST.",
+            message="Solo se admite el metodo POST.",
         )
 
     try:
         payload = parse_event_body(event)
         question = validate_question(payload, max_length=MAX_QUESTION_LENGTH)
-        answer = build_fixed_answer(question)
     except ValidationError as exc:
         logger.warning(
             "event=request_validation_failed request_id=%s code=%s",
@@ -129,6 +126,35 @@ def lambda_handler(
             code=exc.code,
             message=exc.message,
         )
+
+    try:
+        settings = load_bedrock_settings()
+        started_at = time.perf_counter()
+        logger.info(
+            (
+                "event=bedrock_invocation_started request_id=%s "
+                "model_id=%s max_tokens=%s temperature=%s"
+            ),
+            request_id,
+            settings.model_id,
+            settings.max_tokens,
+            settings.temperature,
+        )
+        answer = generate_answer(question, settings=settings)
+    except BedrockInvocationError as exc:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.warning(
+            "event=bedrock_invocation_failed request_id=%s category=%s model_id=%s duration_ms=%s",
+            request_id,
+            exc.category,
+            settings.model_id,
+            duration_ms,
+        )
+        return error_response(
+            status_code=exc.status_code,
+            code="LLM_ERROR",
+            message=exc.public_message,
+        )
     except Exception:
         logger.exception("event=request_failed request_id=%s code=INTERNAL_ERROR", request_id)
         return error_response(
@@ -137,6 +163,13 @@ def lambda_handler(
             message="Ha ocurrido un error interno inesperado.",
         )
 
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    logger.info(
+        "event=bedrock_invocation_completed request_id=%s model_id=%s duration_ms=%s",
+        request_id,
+        settings.model_id,
+        duration_ms,
+    )
     logger.info("event=request_completed request_id=%s status_code=200", request_id)
     return json_response(
         status_code=200,

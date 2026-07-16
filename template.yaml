@@ -13,11 +13,36 @@ Resources:
       Runtime: python3.13
       Architectures:
         - x86_64
-      Timeout: 10
+      Timeout: 20
       MemorySize: 128
-      Description: Fixed-response backend for the aws-cloud-ai-web portfolio project.
+      Description: Bedrock-backed backend for the aws-cloud-ai-web portfolio project.
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: eu.amazon.nova-micro-v1:0
+          BEDROCK_MAX_TOKENS: "500"
+          BEDROCK_TEMPERATURE: "0.3"
       Policies:
         - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Sid: InvokeNovaMicroInferenceProfile
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:GetInferenceProfile
+              Resource:
+                - arn:aws:bedrock:eu-west-1:344774635844:inference-profile/eu.amazon.nova-micro-v1:0
+            - Sid: InvokeNovaMicroFoundationModelViaProfile
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - arn:aws:bedrock:eu-west-1::foundation-model/amazon.nova-micro-v1:0
+                - arn:aws:bedrock:eu-west-3::foundation-model/amazon.nova-micro-v1:0
+                - arn:aws:bedrock:eu-central-1::foundation-model/amazon.nova-micro-v1:0
+                - arn:aws:bedrock:eu-north-1::foundation-model/amazon.nova-micro-v1:0
+              Condition:
+                StringLike:
+                  bedrock:InferenceProfileArn: arn:aws:bedrock:eu-west-1:344774635844:inference-profile/eu.amazon.nova-micro-v1:0
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
