@@ -1,5 +1,5 @@
 export const MAX_QUESTION_LENGTH = 1000;
-export const REQUEST_TIMEOUT_MS = 12000;
+export const REQUEST_TIMEOUT_MS = 25000;
 export const GENERIC_REQUEST_ERROR_MESSAGE =
     "No se ha podido obtener una respuesta. Intentalo de nuevo.";
 export const NETWORK_ERROR_MESSAGE =

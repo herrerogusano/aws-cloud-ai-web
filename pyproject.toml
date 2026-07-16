@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Project foundation for a serverless AWS + Bedrock portfolio application."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "boto3>=1.43.44",
+]
 
 [dependency-groups]
 dev = [
@@ -41,3 +43,11 @@ exclude = [
     "^\\.venv/",
     "^\\.aws-sam/",
 ]
+
+[[tool.mypy.overrides]]
+module = [
+    "boto3",
+    "botocore",
+    "botocore.exceptions",
+]
+ignore_missing_imports = true

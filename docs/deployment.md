@@ -1,13 +1,13 @@
 # Deployment Notes
 
-Status: backend deployed for Phase 5. Frontend remains local only.
+Status: backend deployed for Phase 6. Frontend remains local only.
 
 ## Deployed Scope
 
 - Backend: AWS Lambda deployed through AWS SAM
 - Public backend endpoint: Lambda Function URL
 - Frontend: local only
-- Bedrock: not integrated
+- Bedrock: integrated through the Converse API
 
 ## Current Deployment Values
 
@@ -15,6 +15,19 @@ Status: backend deployed for Phase 5. Frontend remains local only.
 - Region: `eu-west-1`
 - Function name: `aws-cloud-ai-web-backend-handler`
 - Function URL: `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
+- Bedrock model profile: `eu.amazon.nova-micro-v1:0`
+
+## Bedrock Prerequisites
+
+Before deploying Bedrock-backed changes:
+
+- verify target region availability for the model or inference profile
+- verify the current AWS account can invoke the selected model
+- verify whether the model requires direct model invocation or an inference profile
+- verify expected pricing or credit consumption
+- confirm that any required model access or subscription step has already been handled by the user
+
+For this phase, those checks were completed before deployment and the selected profile was successfully invoked from the current AWS account in `eu-west-1`.
 
 ## Local Frontend Configuration
 
@@ -24,7 +37,7 @@ Current configuration decision:
 
 - `config.js` is committed in this phase because the Function URL is already public and not a secret
 - `config.example.js` is the safe template for future environment changes
-- The URL should still be treated as environment-specific configuration
+- the URL should still be treated as environment-specific configuration
 
 Run the local frontend with:
 
@@ -42,9 +55,33 @@ http://localhost:8000
 
 - AWS CLI installed locally
 - AWS SAM CLI installed locally
-- Valid AWS credentials
-- Region configured for `eu-west-1`
+- valid AWS credentials
+- region configured for `eu-west-1`
 - Python tooling already validated locally
+
+## Environment Variables
+
+Configured through `template.yaml`:
+
+```text
+BEDROCK_MODEL_ID=eu.amazon.nova-micro-v1:0
+BEDROCK_MAX_TOKENS=500
+BEDROCK_TEMPERATURE=0.3
+```
+
+## IAM
+
+The Lambda execution role requires only:
+
+- `bedrock:GetInferenceProfile`
+- `bedrock:InvokeModel`
+
+The deployed template scopes those permissions to:
+
+- the selected inference profile ARN
+- the linked `amazon.nova-micro-v1:0` foundation-model ARNs required by that profile
+
+No separate application secrets are needed because Bedrock uses the Lambda IAM role.
 
 ## Local Validation Before Deployment
 
@@ -56,6 +93,12 @@ uv run pytest
 uv run mypy .
 sam validate
 sam build
+```
+
+If Python dependencies change and SAM must include them:
+
+```bash
+uv export --format requirements-txt --no-dev --output-file requirements.txt
 ```
 
 Known local note:
@@ -74,42 +117,32 @@ or:
 aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend --query "Stacks[0].Outputs"
 ```
 
-## Deployment Command
+## Deployment Commands
 
-The stack is deployed with:
-
-```bash
-sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
-```
-
-When reviewing a stack update first:
+Preview the update first:
 
 ```bash
 sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-execute-changeset --no-fail-on-empty-changeset
 ```
 
-## Phase 5 Backend Update
+Then deploy:
 
-During frontend integration, a real browser request revealed duplicate `Access-Control-Allow-Origin` headers on deployed `POST` responses.
+```bash
+sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
+```
 
-Observed behavior:
+## Phase 6 Deployment Result
 
-- `OPTIONS` preflight succeeded
-- Browser `fetch` still failed from `http://localhost:8000`
-- CLI inspection showed the Function URL layer and the Lambda response were both adding `Access-Control-Allow-Origin`
+Deployment date:
 
-Resolution:
+- July 16, 2026
 
-- Removed CORS headers from Lambda response helpers
-- Kept `Content-Type: application/json` in Lambda responses
-- Left deployed browser CORS ownership to the Function URL layer
-- Redeployed the same stack
+CloudFormation review showed only:
 
-CloudFormation review for that update showed only:
-
+- `Modify` on `QuestionHandlerFunctionRole`
 - `Modify` on `QuestionHandlerFunction`
 
-No new AWS resources were created.
+No new stack was created.
 
 ## Smoke Test Commands
 
@@ -117,50 +150,49 @@ Successful request:
 
 ```bash
 curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
-  -H "Origin: http://localhost:8000" \
   -H "Content-Type: application/json" \
   -d '{"question":"What is AWS Lambda?"}'
-```
-
-Preflight check:
-
-```bash
-curl -X OPTIONS "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
-  -H "Origin: http://localhost:8000" \
-  -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: Content-Type"
 ```
 
 Wrong method:
 
 ```bash
-curl -X GET "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
-  -H "Origin: http://localhost:8000"
+curl -X GET "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/"
 ```
 
-## Browser Verification Notes
+## Troubleshooting
 
-Confirmed in a real browser flow:
+If the frontend shows `La aplicacion no tiene configurado el servicio backend.`:
 
-- The local frontend loaded from `http://localhost:8000`
-- Empty input validation still worked
-- The valid question flow performed a real backend request
-- Loading state and disabled submit behavior were visible during the request
-- The deployed fixed answer rendered successfully
-- CORS worked after the backend redeploy
-- A bad Function URL produced the expected connection-error UI
+- check `frontend/config.js`
+- ensure `window.APP_CONFIG.apiUrl` exists and is a valid `http` or `https` URL
 
-## Common Failures
+If the frontend shows `No se ha podido conectar con el servicio...`:
 
-- `NoCredentials`: configure AWS credentials before deployment
-- `AccessDenied` on CloudFormation: expand IAM permissions for the deployment identity
-- `sam build` permission errors on Windows: remove `.aws-sam/build` and rerun
-- Browser connection error after backend change: inspect for duplicate `Access-Control-Allow-Origin` headers
-- `sam local invoke` container errors: ensure Docker is running and reachable
+- confirm the Function URL is still reachable
+- confirm the local page is being served over `http://localhost:8000` or similar
+- if backend code or Function URL CORS behavior changed, redeploy the same SAM stack
+
+If the backend returns `LLM_ERROR`:
+
+- inspect CloudWatch logs for `bedrock_invocation_failed`
+- confirm the selected model profile is still available in `eu-west-1`
+- confirm IAM still allows the selected inference profile and linked foundation-model ARNs
+- distinguish temporary failures such as throttling or service unavailability from access or configuration issues
+
+If `sam build` skips dependencies:
+
+- confirm `requirements.txt` exists at the project root used by `CodeUri`
+- regenerate it from `uv` after dependency changes
+
+If `sam build` fails on Windows with access errors:
+
+- remove `.aws-sam/build`
+- run `sam build` again
 
 ## Security Notes
 
 - The Function URL uses `AuthType: NONE`
 - Public unauthenticated access is intentional only for this educational phase
 - CORS is not authentication
-- Bedrock is not used in this phase
+- Bedrock access relies on the Lambda IAM role, not on frontend or environment secrets

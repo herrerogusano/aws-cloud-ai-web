@@ -1,18 +1,20 @@
 # aws-cloud-ai-web
 
-`aws-cloud-ai-web` is a serverless portfolio project built in phases. The current application is a local static frontend that sends a real question to a deployed AWS Lambda backend through a public Lambda Function URL. The backend still returns a fixed simulated answer for now. Amazon Bedrock is planned for the next implementation phase.
+`aws-cloud-ai-web` is a serverless portfolio project built in phases. The current application runs a local static frontend that sends real questions to a deployed AWS Lambda backend through a public Lambda Function URL, and the backend now generates the answer through Amazon Bedrock.
 
 ## Current Status
 
-Phase 5 is complete.
+Phase 6 is complete as of July 16, 2026.
 
 - Repository structure and Python tooling are in place.
 - The frontend lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
 - The backend Lambda is deployed in `eu-west-1` through AWS SAM.
-- The frontend now performs a real `POST` request to the deployed Function URL.
-- The backend still returns a fixed simulated answer.
-- No Amazon Bedrock call exists yet.
-- The frontend is not deployed to S3 yet.
+- The frontend performs a real `POST` request to the deployed Function URL.
+- The backend calls Amazon Bedrock through the Converse API.
+- The public API contract remains `{"answer":"..."}` on success.
+- The frontend is still local only.
+- There is still no S3 frontend deployment.
+- There is still no CI/CD workflow in this phase.
 
 ## Current Implemented Architecture
 
@@ -20,16 +22,8 @@ Phase 5 is complete.
 Local browser frontend
   -> Lambda Function URL
   -> AWS Lambda
-  -> Fixed simulated response
-```
-
-Future planned architecture:
-
-```text
-S3-hosted frontend
-  -> Lambda Function URL
-  -> AWS Lambda
   -> Amazon Bedrock
+  -> Generated answer
 ```
 
 More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
@@ -44,12 +38,37 @@ More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-clou
 - Infrastructure as code: AWS SAM
 - Frontend: plain HTML, CSS, and JavaScript
 - Public backend endpoint: Lambda Function URL
-- Planned LLM provider: Amazon Bedrock
+- LLM provider: Amazon Bedrock
+- Selected Bedrock model profile: `eu.amazon.nova-micro-v1:0`
 - Planned frontend hosting: Amazon S3
 - Planned CI/CD: GitHub Actions
 - Git workflow: short-lived branches and Pull Requests
 - Commit style: Conventional Commits
 - AWS region: `eu-west-1`
+
+## Bedrock Configuration
+
+The Lambda reads its Bedrock configuration from environment variables defined in `template.yaml`.
+
+- `BEDROCK_MODEL_ID`
+- `BEDROCK_MAX_TOKENS`
+- `BEDROCK_TEMPERATURE`
+
+Current deployed values:
+
+```text
+BEDROCK_MODEL_ID=eu.amazon.nova-micro-v1:0
+BEDROCK_MAX_TOKENS=500
+BEDROCK_TEMPERATURE=0.3
+```
+
+Model selection summary:
+
+- `eu.amazon.nova-micro-v1:0` is active in `eu-west-1`
+- it supports the Converse API
+- it was successfully invoked from the current AWS account before implementation
+- it is a fast and relatively inexpensive text model suited to a simple interactive portfolio exercise
+- it uses an inference profile, so IAM must allow the profile plus the linked foundation-model ARNs
 
 ## Local Prerequisites
 
@@ -83,9 +102,9 @@ window.APP_CONFIG = {
 
 ```bash
 uv sync
-uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run pytest
 uv run mypy .
 sam validate
 sam build
@@ -94,19 +113,17 @@ python -m http.server 8000 --directory frontend
 
 Then open `http://localhost:8000`.
 
+If Python dependencies change and SAM must package them, refresh the deployment manifest with:
+
+```bash
+uv export --format requirements-txt --no-dev --output-file requirements.txt
+```
+
 To retrieve deployed stack outputs:
 
 ```bash
 sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 ```
-
-To invoke the backend directly without AWS tooling:
-
-```bash
-python -c "from backend.handler import lambda_handler; event={'version':'2.0','requestContext':{'http':{'method':'POST'}},'isBase64Encoded':False,'body':'{\"question\":\"What is AWS Lambda?\"}'}; print(lambda_handler(event, None))"
-```
-
-Useful local test fixtures are available in `events/`.
 
 ## Current Frontend Functionality
 
@@ -114,7 +131,7 @@ Useful local test fixtures are available in `events/`.
 - Rejects empty questions with client-side validation
 - Validates the backend URL configuration before sending
 - Sends a real `POST` request with `Content-Type: application/json`
-- Uses `AbortController` with a 12-second timeout
+- Uses `AbortController` with a 25-second timeout
 - Prevents repeated submissions while a request is in progress
 - Shows loading, success, and error states
 - Renders backend text safely with `textContent`
@@ -125,15 +142,19 @@ Useful local test fixtures are available in `events/`.
 - Accepts `POST` requests only
 - Parses JSON request bodies
 - Validates the `question` field with a maximum of 1000 characters
-- Returns a fixed JSON answer without Bedrock
-- Returns consistent JSON errors with safe public messages
-- Relies on the Lambda Function URL CORS configuration for deployed browser access
+- Calls Amazon Bedrock through `bedrock-runtime.converse`
+- Uses a small fixed system prompt plus the validated user question
+- Maps provider failures to controlled public errors
+- Logs Bedrock start, completion, failure category, duration, model id, and request id
+- Uses IAM-based AWS authentication only
 
 Important:
 
-- The backend response is still fixed
-- No Amazon Bedrock call is made
+- No external API key is used
+- No streaming exists in this phase
+- No chat history exists in this phase
 - No frontend S3 deployment exists yet
+- No CI/CD workflow exists yet
 
 ## Deployed Backend Endpoint
 
@@ -149,53 +170,38 @@ curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.a
   -d '{"question":"What is AWS Lambda?"}'
 ```
 
-Security limitations:
+## Cost Warning
+
+Amazon Bedrock usage is not guaranteed to be free.
+
+- This phase uses `Amazon Nova Micro` because it is fast and comparatively low-cost for small text requests.
+- Keep testing low-volume and intentional.
+- Avoid repeated integration calls and load testing.
+- Check the official AWS Nova pricing page before heavier usage.
+
+## Security Limitations
 
 - The Function URL is public and unauthenticated in this phase
 - CORS is not authentication or authorization
-- This endpoint is acceptable for a learning exercise, not for sensitive production data
+- The backend trusts AWS IAM for Bedrock access, not an app secret
+- This setup is acceptable for a learning exercise, not for sensitive production data
 
-## Browser Validation Summary
+## Validation Summary
 
-The frontend was verified against the deployed backend from `http://localhost:8000`.
+Verified in this phase:
 
-Confirmed:
-
-- The page loads correctly
-- Backend configuration loads from `config.js`
-- Empty input is rejected in the browser
-- A valid question sends a real request and receives the deployed fixed answer
-- The loading state appears and the submit button is disabled during the request
-- The browser request succeeds with CORS enabled
-- A browser test with an intentionally bad Function URL shows the expected connection error message
-
-Pending:
-
-- A true narrow mobile-width browser pass is still worth checking manually in a normal browser window. The in-app browser viewport override did not actually reduce `window.innerWidth`, so that specific visual confirmation remains weaker than the other checks.
-
-## Troubleshooting
-
-If the frontend shows `La aplicacion no tiene configurado el servicio backend.`:
-
-- Check `frontend/config.js`
-- Ensure `window.APP_CONFIG.apiUrl` exists and is a valid `http` or `https` URL
-
-If the frontend shows `No se ha podido conectar con el servicio...`:
-
-- Confirm the Function URL is still reachable
-- Confirm the local page is being served over `http://localhost:8000` or similar
-- If backend code or Function URL CORS behavior changed, redeploy the same SAM stack
-- Do not use `mode: "no-cors"` and do not disable browser security
-
-If browser requests fail after backend updates:
-
-- Check for duplicated `Access-Control-Allow-Origin` headers
-- Keep deployed CORS in the Function URL layer and avoid duplicating the same header in Lambda responses
-
-If `sam build` fails on Windows with access errors:
-
-- Remove `.aws-sam/build`
-- Run `sam build` again
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest`
+- `uv run mypy .`
+- `sam validate`
+- `sam build`
+- Bedrock model availability and account access in `eu-west-1`
+- Stack update preview and deploy of the existing backend stack
+- Direct Function URL smoke test with a real Bedrock answer
+- Local frontend browser verification with empty-input validation, loading state, generated answer, second request, and clean browser console
+- CloudWatch log verification for Bedrock start and completion events
 
 ## Documentation
 
@@ -209,4 +215,4 @@ If `sam build` fails on Windows with access errors:
 
 ## Next Planned Phase
 
-The exact recommended next step is Phase 6 from the implementation plan: integrate Amazon Bedrock into the deployed backend while keeping the existing frontend-to-backend flow and response contract stable.
+The exact recommended next step is Phase 7 from the implementation plan: deploy the static frontend to Amazon S3 while keeping the Bedrock-backed backend and the current response contract stable.

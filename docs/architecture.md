@@ -1,36 +1,28 @@
 # Architecture
 
-This document describes the current implemented architecture and the next planned target architecture for `aws-cloud-ai-web`.
+This document describes the current implemented architecture for `aws-cloud-ai-web`.
 
 ## Current Architecture
 
-Status: implemented as of Phase 5.
+Status: implemented as of Phase 6 on July 16, 2026.
 
 ```text
 Local browser frontend
   -> Local static files served over HTTP
   -> Lambda Function URL
   -> AWS Lambda
-  -> Fixed simulated response
+  -> Amazon Bedrock
+  -> Generated answer
 ```
 
 Additional local validation path:
 
 ```text
-Local Python invocation
+Local Python tests
   -> backend.handler.lambda_handler
-  -> Fixed JSON response
+  -> mocked Bedrock client
+  -> Stable JSON response contract
 ```
-
-Current notes:
-
-- The frontend runs locally only.
-- The backend runs in AWS Lambda.
-- The frontend sends a real `POST` request to the deployed Function URL.
-- The backend validates the request and returns a fixed JSON answer.
-- Amazon Bedrock is not integrated yet.
-- CORS for deployed browser requests is handled by the Function URL layer.
-- The Lambda response body keeps only its JSON content header to avoid duplicate CORS headers in browser traffic.
 
 ## Current Components
 
@@ -39,6 +31,7 @@ Current notes:
 - Plain HTML, CSS, and JavaScript in `frontend/`
 - Reads backend configuration from `frontend/config.js`
 - Uses `fetch` plus `AbortController`
+- Uses a 25-second browser timeout to stay above the 20-second Lambda timeout
 - Renders success and error states without `innerHTML`
 
 ### Public backend entry point
@@ -51,7 +44,15 @@ Current notes:
 
 - Python handler in `backend.handler`
 - Shared validation and response helpers
-- Fixed response to preserve scope before Bedrock integration
+- Bedrock integration isolated in `backend.bedrock_client`
+- Uses module-level lazy Bedrock client reuse without network calls during import
+
+### Amazon Bedrock
+
+- Runtime client: `bedrock-runtime`
+- API style: Converse API
+- Selected profile: `eu.amazon.nova-micro-v1:0`
+- Authentication: Lambda execution role only
 
 ## Current API Shape
 
@@ -79,56 +80,84 @@ Current notes:
 ```json
 {
   "error": {
-    "code": "INVALID_REQUEST",
-    "message": "..."
+    "code": "LLM_ERROR",
+    "message": "No se ha podido generar una respuesta."
   }
 }
 ```
 
 Detailed contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
 
-## Future Planned Architecture
+## Bedrock Request Design
 
-Status: planned only.
+The backend sends:
+
+- one fixed system instruction
+- one validated user message
+- conservative inference settings
+
+Current intent of the system instruction:
+
+```text
+You are a helpful assistant.
+Answer the user's question clearly and concisely.
+Do not claim access to information or tools you do not have.
+```
+
+The application does not currently include:
+
+- conversation memory
+- tool use
+- retrieval
+- streaming
+
+## Timeout Behavior
+
+- Lambda timeout: `20` seconds
+- Frontend request timeout: `25` seconds
+
+This keeps normal browser requests from aborting before the Lambda reaches its own timeout budget.
+
+## Error Flow
+
+Validation or provider failures are translated as follows:
+
+- invalid request or invalid JSON -> `400`
+- wrong method -> `405`
+- Bedrock temporary unavailability or throttling -> `503`
+- Bedrock provider failure or invalid provider response -> `502`
+- unexpected internal failure -> `500`
+
+The frontend only receives controlled public messages and never raw AWS exception payloads.
+
+## IAM Notes
+
+The Lambda execution role now includes:
+
+- `bedrock:GetInferenceProfile` on the selected inference profile ARN
+- `bedrock:InvokeModel` on the selected inference profile ARN
+- `bedrock:InvokeModel` on the linked `amazon.nova-micro-v1:0` foundation-model ARNs for the profile regions
+- a `bedrock:InferenceProfileArn` condition to keep the foundation-model permission tied to the selected profile
+
+No broad Bedrock managed policy was attached.
+
+## Still Not In Scope
+
+- S3-hosted frontend
+- CloudFront
+- API Gateway
+- authentication
+- database storage
+- chat history
+- CI/CD
+
+## Planned Next Phase
 
 ```text
 S3-hosted frontend
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
-  -> AWS Lambda
-  -> Frontend response
 ```
 
-## Planned Responsibilities
-
-### Frontend
-
-- Render the question-and-answer interface
-- Submit a question to the backend over HTTPS
-- Render the backend response and error states
-
-### Lambda backend
-
-- Validate incoming questions
-- Call Amazon Bedrock in a later phase
-- Return a stable JSON contract to the frontend
-
-### Amazon Bedrock
-
-- Provide model inference for user questions
-- Remain abstracted behind backend code so model choice can evolve later
-
-## Planned Deployment Flow
-
-```text
-Feature branch
-  -> Pull Request
-  -> CI validation
-  -> Merge to main
-  -> GitHub Actions
-  -> AWS SAM backend deployment
-  -> S3 frontend synchronization
-```
-
-Status: planned only. CI/CD and S3 frontend deployment do not exist yet.
+Status: planned only for Phase 7.

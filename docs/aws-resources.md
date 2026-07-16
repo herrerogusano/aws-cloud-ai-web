@@ -1,15 +1,15 @@
 # AWS Resource Inventory
 
-Status: backend resources created in `eu-west-1` for Phase 4.
+Status: backend resources updated in `eu-west-1` for Phase 6.
 
 ## Current Inventory
 
 | Resource Type | Identifier | Status | Notes |
 | --- | --- | --- | --- |
 | CloudFormation stack | `aws-cloud-ai-web-backend` | Created | IaC entry point for backend resources |
-| Lambda function | `aws-cloud-ai-web-backend-handler` | Created | Returns the fixed simulated backend response |
+| Lambda function | `aws-cloud-ai-web-backend-handler` | Created | Calls Amazon Bedrock and returns generated answers |
 | Lambda Function URL | Environment-specific URL | Created | Public unauthenticated endpoint for this learning phase |
-| IAM execution role | Auto-created by SAM/CloudFormation | Created | Used only for Lambda execution and CloudWatch logging |
+| IAM execution role | Auto-created by SAM/CloudFormation | Created | Used for Lambda execution, CloudWatch logging, and scoped Bedrock invocation |
 | CloudWatch log group | `/aws/lambda/aws-cloud-ai-web-backend-handler` | Created | 7-day retention configured |
 | SAM managed artifact bucket | `aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f` | Already present / used | Managed by SAM for deployment artifacts |
 
@@ -27,7 +27,13 @@ Status: backend resources created in `eu-west-1` for Phase 4.
 - Region: `eu-west-1`
 - Created through IaC: yes
 - Persistent data: no
-- Cost considerations: low for light usage, but invocations still consume billable Lambda usage beyond applicable allowances
+- Timeout: `20` seconds
+- Memory size: `128` MB
+- Environment variables:
+  - `BEDROCK_MODEL_ID`
+  - `BEDROCK_MAX_TOKENS`
+  - `BEDROCK_TEMPERATURE`
+- Cost considerations: low for light usage, but invocations and Bedrock inference both consume billable usage beyond applicable allowances
 
 ### Lambda Function URL
 
@@ -40,7 +46,12 @@ Status: backend resources created in `eu-west-1` for Phase 4.
 
 - Region: `eu-west-1`
 - Created through IaC: yes
-- Purpose: basic Lambda execution and logging only
+- Purpose:
+  - basic Lambda execution
+  - CloudWatch logging
+  - `bedrock:GetInferenceProfile` on the selected inference profile ARN
+  - `bedrock:InvokeModel` on the selected inference profile ARN
+  - `bedrock:InvokeModel` on the linked `amazon.nova-micro-v1:0` foundation-model ARNs with an inference-profile condition
 - Persistent data: no
 
 ### CloudWatch log group
@@ -56,3 +67,22 @@ Status: backend resources created in `eu-west-1` for Phase 4.
 - Created through IaC: managed automatically by SAM
 - Persistent data: stores deployment artifacts
 - Removal: only if no other SAM-managed deployments depend on it
+
+## What Phase 6 Changed
+
+- Updated the existing Lambda function code
+- Updated the existing Lambda execution role policy
+- Added Bedrock-related environment configuration to the function
+- Increased the Lambda timeout from `10` to `20` seconds
+
+## What Phase 6 Did Not Create
+
+- No new CloudFormation stack
+- No API Gateway
+- No S3 frontend hosting resource
+- No database
+- No separate Bedrock resource owned by this stack
+
+Important note:
+
+- The application invokes an AWS-managed Bedrock inference profile and foundation model, but the stack does not create those Bedrock resources itself.
