@@ -124,6 +124,11 @@ Resources:
                   - lambda:UpdateFunctionConfiguration
                   - lambda:UpdateFunctionUrlConfig
                 Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:aws-cloud-ai-web-backend-handler
+              - Sid: UseSamTransformForChangeSets
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                Resource: !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
               - Sid: ManageProjectLogGroup
                 Effect: Allow
                 Action:
@@ -152,6 +157,11 @@ Resources:
                   - s3:PutBucketTagging
                   - s3:PutBucketWebsite
                 Resource: !Sub arn:aws:s3:::${FrontendBucketName}
+              - Sid: ReadSamArtifactsForLambdaUpdates
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${SamArtifactBucketName}/*
               - Sid: ManageLambdaExecutionRole
                 Effect: Allow
                 Action:
@@ -207,11 +217,14 @@ Resources:
                 Effect: Allow
                 Action:
                   - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStackResource
                   - cloudformation:DescribeStackResources
                   - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
                   - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
                 Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${BackendStackName}/*
               - Sid: ManageProjectChangeSets
                 Effect: Allow
