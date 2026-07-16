@@ -6,7 +6,7 @@
     <title>Pregunta a la IA</title>
     <meta
         name="description"
-        content="Frontend local para probar la experiencia de preguntar a una IA antes de integrar AWS Lambda y Amazon Bedrock."
+        content="Frontend local conectado a una Lambda Function URL para probar la experiencia antes de integrar Amazon Bedrock."
     >
     <link rel="stylesheet" href="./styles.css">
 </head>
@@ -16,16 +16,16 @@
             <p class="eyebrow">aws-cloud-ai-web</p>
             <h1 id="page-title">Pregunta a la IA</h1>
             <p class="intro">
-                Escribe una pregunta y prueba la experiencia local de la aplicacion antes de
-                conectar AWS Lambda y Amazon Bedrock.
+                Escribe una pregunta y prueba la integracion local del frontend con la Lambda
+                desplegada en AWS antes de conectar Amazon Bedrock.
             </p>
             <p class="local-note">
-                Esta fase funciona solo en local. La respuesta actual es simulada y no hace
-                ninguna peticion de red.
+                Esta fase sigue ejecutandose en local, pero ahora envia una peticion real al
+                backend publico y devuelve una respuesta fija.
             </p>
         </section>
 
-        <section class="workspace" aria-label="Simulador local de preguntas">
+        <section class="workspace" aria-label="Pregunta al backend desplegado">
             <form id="question-form" class="panel form-panel" novalidate>
                 <div class="panel-heading">
                     <h2>Tu pregunta</h2>
@@ -45,8 +45,8 @@
 
                 <div class="field-meta">
                     <p id="question-help" class="helper-text">
-                        La integracion real llegara en una fase posterior. Ahora mismo la respuesta
-                        se genera de forma simulada.
+                        El frontend usa una Function URL configurada en <code>config.js</code>. La
+                        respuesta sigue siendo fija mientras Bedrock permanece fuera de alcance.
                     </p>
                     <p id="question-counter" class="counter" aria-live="polite">0 / 1000</p>
                 </div>
@@ -68,7 +68,7 @@
             <section class="panel output-panel" aria-labelledby="response-title">
                 <div class="panel-heading">
                     <h2 id="response-title">Respuesta</h2>
-                    <p>Vista previa del comportamiento local del frontend.</p>
+                    <p>Respuesta devuelta por el backend desplegado en AWS.</p>
                 </div>
 
                 <div
@@ -90,6 +90,7 @@
         </section>
     </main>
 
+    <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>
 </body>
 </html>
