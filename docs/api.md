@@ -1,18 +1,18 @@
-# Local API Contract
+# API Contract
 
-This document describes the current local Lambda handler contract for Phase 3.
+This document describes the current request and response contract between the local frontend and the deployed backend.
 
-Status: implemented locally only. No AWS deployment exists yet.
+Status: implemented for Phase 5.
 
-## Endpoint Shape
+## Public Endpoint
 
-Planned entry point:
-
-- Handler: `backend.handler.lambda_handler`
+- Entry point: Lambda Function URL
+- Region: `eu-west-1`
 - Method: `POST`
 - Path: `/`
+- Request content type: `application/json`
 
-The frontend is not connected to this handler yet.
+The local frontend is now connected to this deployed endpoint.
 
 ## Request Body
 
@@ -20,42 +20,37 @@ Expected JSON body:
 
 ```json
 {
-  "question": "¿Qué es AWS Lambda?"
+  "question": "What is AWS Lambda?"
 }
 ```
 
-## Validation Rules
+Rules:
 
-The `question` field must:
-
-- exist
-- be a string
-- be trimmed
-- not be empty
-- not exceed 1000 characters
+- `question` must exist
+- `question` must be a string
+- `question` is trimmed before sending
+- `question` must not be empty after trimming
+- `question` must not exceed 1000 characters
 
 ## Successful Response
 
-Example response:
+Expected response body:
 
 ```json
 {
-  "statusCode": 200,
-  "headers": {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST,OPTIONS",
-    "Content-Type": "application/json"
-  },
-  "body": "{\"answer\":\"Esta es una respuesta simulada del backend para la pregunta: «¿Qué es AWS Lambda?». La integración con Amazon Bedrock se añadirá en una fase posterior.\"}"
+  "answer": "This is a fixed simulated backend answer..."
 }
 ```
 
-The response body always contains JSON.
+Notes:
+
+- The response body is JSON
+- The frontend expects `answer` to be a string
+- The frontend renders the answer with safe text rendering only
 
 ## Error Response Shape
 
-Every error uses this structure:
+Every backend error uses this structure:
 
 ```json
 {
@@ -81,9 +76,35 @@ Every error uses this structure:
 - `405` for unsupported HTTP methods
 - `500` for unexpected internal errors
 
-## Event Compatibility Notes
+## Browser CORS Behavior
 
-- Production-compatible string bodies are supported
+Deployed browser traffic relies on the Lambda Function URL CORS configuration.
+
+Current deployed behavior:
+
+- Preflight `OPTIONS` replies from the Function URL layer
+- Browser `POST` responses include `Access-Control-Allow-Origin` from the Function URL layer
+- Lambda response helpers keep only `Content-Type: application/json` to avoid duplicate CORS headers
+
+This was important in Phase 5 because duplicate `Access-Control-Allow-Origin` headers caused real browser failures even though `curl` smoke tests looked healthy at first.
+
+## Local Handler Invocation Notes
+
+Direct local invocation of `backend.handler.lambda_handler` returns a Lambda-style object:
+
+```json
+{
+  "statusCode": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"answer\":\"...\"}"
+}
+```
+
+Local compatibility behavior:
+
+- Production-style string bodies are supported
 - Dictionary bodies are also accepted for local test convenience
 - Missing HTTP methods are treated as `POST` for local compatibility
 - Base64-encoded request bodies are rejected in this phase

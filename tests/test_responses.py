@@ -11,7 +11,7 @@ def decode_body(response: dict[str, object]) -> dict[str, object]:
     return parsed_body
 
 
-def test_json_response_has_json_body_and_cors_headers() -> None:
+def test_json_response_has_json_body_and_default_headers() -> None:
     response = json_response(status_code=200, payload={"answer": "ok"})
 
     assert response["statusCode"] == 200

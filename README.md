@@ -1,30 +1,35 @@
 # aws-cloud-ai-web
 
-`aws-cloud-ai-web` is a planned serverless portfolio project. The target application is a static frontend that sends a user question to an AWS Lambda backend, and the backend will later call an LLM through Amazon Bedrock.
+`aws-cloud-ai-web` is a serverless portfolio project built in phases. The current application is a local static frontend that sends a real question to a deployed AWS Lambda backend through a public Lambda Function URL. The backend still returns a fixed simulated answer for now. Amazon Bedrock is planned for the next implementation phase.
 
 ## Current Status
 
-The repository now includes the local frontend shell, the local Lambda handler, and a deployed AWS backend for Phase 4.
+Phase 5 is complete.
 
-- Repository structure and Python tooling are prepared.
-- A local frontend exists in `frontend/` using plain HTML, CSS, and JavaScript.
+- Repository structure and Python tooling are in place.
+- The frontend lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
 - The backend Lambda is deployed in `eu-west-1` through AWS SAM.
-- The backend exposes a public Lambda Function URL and still returns a fixed simulated response.
-- The frontend is still not connected to the deployed backend yet.
+- The frontend now performs a real `POST` request to the deployed Function URL.
+- The backend still returns a fixed simulated answer.
+- No Amazon Bedrock call exists yet.
+- The frontend is not deployed to S3 yet.
 
-## Planned Architecture
-
-This architecture is planned and not yet deployed.
+## Current Implemented Architecture
 
 ```text
-User
-  -> Static frontend in S3
-  -> HTTPS request
+Local browser frontend
+  -> Lambda Function URL
+  -> AWS Lambda
+  -> Fixed simulated response
+```
+
+Future planned architecture:
+
+```text
+S3-hosted frontend
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
-  -> AWS Lambda
-  -> Frontend response
 ```
 
 More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
@@ -44,15 +49,35 @@ More detail: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-clou
 - Planned CI/CD: GitHub Actions
 - Git workflow: short-lived branches and Pull Requests
 - Commit style: Conventional Commits
-- Planned AWS region: `eu-west-1`
+- AWS region: `eu-west-1`
 
 ## Local Prerequisites
 
 - Python 3.13
 - `uv`
 - Git
-- AWS SAM CLI for future infrastructure validation and deployment steps
-- AWS CLI for future AWS authentication and deployment steps
+- AWS CLI
+- AWS SAM CLI
+
+## Frontend Configuration
+
+The frontend reads the backend URL from `frontend/config.js`.
+
+- `frontend/config.js` is committed in this learning phase because the Function URL is already public and is not a secret.
+- `frontend/config.example.js` provides the safe template shape.
+- The URL is still treated as environment-specific configuration and should not be scattered through app logic.
+
+Current committed Function URL:
+
+- `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
+
+Configuration shape:
+
+```javascript
+window.APP_CONFIG = {
+    apiUrl: "https://example.lambda-url.eu-west-1.on.aws/",
+};
+```
 
 ## Development Commands
 
@@ -62,20 +87,12 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
+sam validate
+sam build
 python -m http.server 8000 --directory frontend
 ```
 
-Then open `http://127.0.0.1:8000`.
-
-For local error-state testing, open `http://127.0.0.1:8000/?simulateError=1`.
-
-To invoke the backend directly without AWS tooling:
-
-```bash
-python -c "from backend.handler import lambda_handler; event={'version':'2.0','requestContext':{'http':{'method':'POST'}},'isBase64Encoded':False,'body':'{\"question\":\"¿Qué es AWS Lambda?\"}'}; print(lambda_handler(event, None))"
-```
-
-Useful test event fixtures are available in `events/`.
+Then open `http://localhost:8000`.
 
 To retrieve deployed stack outputs:
 
@@ -83,40 +100,40 @@ To retrieve deployed stack outputs:
 sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 ```
 
-Notes:
+To invoke the backend directly without AWS tooling:
 
-- `mypy` was selected instead of Pyright to keep the initial toolchain Python-native and simple to run through `uv`.
-- `boto3` is intentionally not installed as a production dependency at this stage. The planned backend will run on AWS Lambda, where the AWS SDK is commonly available already. If later implementation needs an explicit pinned SDK dependency, that decision can be revisited.
+```bash
+python -c "from backend.handler import lambda_handler; event={'version':'2.0','requestContext':{'http':{'method':'POST'}},'isBase64Encoded':False,'body':'{\"question\":\"What is AWS Lambda?\"}'}; print(lambda_handler(event, None))"
+```
+
+Useful local test fixtures are available in `events/`.
 
 ## Current Frontend Functionality
 
 - Accepts one question in a multiline text area
 - Rejects empty questions with client-side validation
-- Prevents repeated submissions while a simulated response is in progress
-- Shows a visible loading state
-- Displays a simulated success response with safe text rendering
-- Displays a simulated error message when `?simulateError=1` is present
-
-Important:
-
-- Responses are simulated locally
-- No real HTTP request is made
-- No Lambda Function URL is configured yet
+- Validates the backend URL configuration before sending
+- Sends a real `POST` request with `Content-Type: application/json`
+- Uses `AbortController` with a 12-second timeout
+- Prevents repeated submissions while a request is in progress
+- Shows loading, success, and error states
+- Renders backend text safely with `textContent`
+- Preserves the current question after backend or network errors
 
 ## Current Backend Functionality
 
-- Accepts local Lambda-style events
-- Supports `POST` requests only
+- Accepts `POST` requests only
 - Parses JSON request bodies
 - Validates the `question` field with a maximum of 1000 characters
-- Returns a fixed JSON answer that clearly indicates the response is temporary
-- Returns consistent JSON errors with status codes and CORS headers
+- Returns a fixed JSON answer without Bedrock
+- Returns consistent JSON errors with safe public messages
+- Relies on the Lambda Function URL CORS configuration for deployed browser access
 
 Important:
 
 - The backend response is still fixed
 - No Amazon Bedrock call is made
-- The frontend is not connected to this backend yet
+- No frontend S3 deployment exists yet
 
 ## Deployed Backend Endpoint
 
@@ -129,7 +146,7 @@ Example request:
 ```bash
 curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
   -H "Content-Type: application/json" \
-  -d '{"question":"Que es AWS Lambda?"}'
+  -d '{"question":"What is AWS Lambda?"}'
 ```
 
 Security limitations:
@@ -138,11 +155,53 @@ Security limitations:
 - CORS is not authentication or authorization
 - This endpoint is acceptable for a learning exercise, not for sensitive production data
 
+## Browser Validation Summary
+
+The frontend was verified against the deployed backend from `http://localhost:8000`.
+
+Confirmed:
+
+- The page loads correctly
+- Backend configuration loads from `config.js`
+- Empty input is rejected in the browser
+- A valid question sends a real request and receives the deployed fixed answer
+- The loading state appears and the submit button is disabled during the request
+- The browser request succeeds with CORS enabled
+- A browser test with an intentionally bad Function URL shows the expected connection error message
+
+Pending:
+
+- A true narrow mobile-width browser pass is still worth checking manually in a normal browser window. The in-app browser viewport override did not actually reduce `window.innerWidth`, so that specific visual confirmation remains weaker than the other checks.
+
+## Troubleshooting
+
+If the frontend shows `La aplicacion no tiene configurado el servicio backend.`:
+
+- Check `frontend/config.js`
+- Ensure `window.APP_CONFIG.apiUrl` exists and is a valid `http` or `https` URL
+
+If the frontend shows `No se ha podido conectar con el servicio...`:
+
+- Confirm the Function URL is still reachable
+- Confirm the local page is being served over `http://localhost:8000` or similar
+- If backend code or Function URL CORS behavior changed, redeploy the same SAM stack
+- Do not use `mode: "no-cors"` and do not disable browser security
+
+If browser requests fail after backend updates:
+
+- Check for duplicated `Access-Control-Allow-Origin` headers
+- Keep deployed CORS in the Function URL layer and avoid duplicating the same header in Lambda responses
+
+If `sam build` fails on Windows with access errors:
+
+- Remove `.aws-sam/build`
+- Run `sam build` again
+
 ## Documentation
 
 - Implementation plan: [docs/implementation-plan.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/implementation-plan.md)
-- Planned architecture: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
-- Local API contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
+- Architecture: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
+- API contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
 - Deployment notes: [docs/deployment.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/deployment.md)
 - Teardown notes: [docs/teardown.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/teardown.md)
 - Resource inventory: [docs/aws-resources.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/aws-resources.md)
@@ -150,4 +209,4 @@ Security limitations:
 
 ## Next Planned Phase
 
-The exact recommended next step is to start Phase 5 from the implementation plan: connect the frontend to the deployed Lambda Function URL while keeping the backend response fixed.
+The exact recommended next step is Phase 6 from the implementation plan: integrate Amazon Bedrock into the deployed backend while keeping the existing frontend-to-backend flow and response contract stable.

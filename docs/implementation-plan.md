@@ -280,6 +280,38 @@ Validation required:
 Manual user action expected:
 No.
 
+Current status:
+- Completed on July 16, 2026 on branch `feature/frontend-api-integration`.
+
+Validation performed:
+- `uv run pytest`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy .`
+- `sam validate`
+- `sam build`
+- Browser verification from `http://localhost:8000`
+- Browser verification of the connection-error path with an intentionally bad Function URL
+- Function URL smoke tests for valid `POST`, `OPTIONS` preflight, and `405` wrong method
+- Stack update preview and redeploy of the existing backend stack
+
+Configuration approach:
+- Added `frontend/config.js` for the current public Function URL
+- Added `frontend/config.example.js` as the safe template
+- Kept the URL out of main frontend logic and read it through `window.APP_CONFIG`
+- Committed `config.js` for this learning phase because the Function URL is public and not a secret
+
+Backend adjustment made during this phase:
+- Removed duplicated CORS headers from Lambda responses after a real browser request exposed two `Access-Control-Allow-Origin` values on deployed `POST` responses
+- Left deployed browser CORS responsibility in the Function URL layer
+- Redeployed the same stack without creating new resources
+
+Deviation from original plan:
+- A small backend fix was needed even though this phase was frontend-led, because browser CORS behavior failed in practice despite earlier CLI smoke tests passing.
+
+Manual checks still pending:
+- A true narrow mobile-width browser pass is still worth confirming in a normal browser window because the in-app browser viewport override did not actually shrink `window.innerWidth`.
+
 ### Phase 6. Amazon Bedrock integration
 
 Objective:

@@ -1,82 +1,59 @@
-# Planned Architecture
+# Architecture
 
-This document describes the intended architecture for `aws-cloud-ai-web`.
-
-Status: planned only. Nothing described here has been deployed yet.
+This document describes the current implemented architecture and the next planned target architecture for `aws-cloud-ai-web`.
 
 ## Current Architecture
 
-This is the implemented architecture as of Phase 4:
+Status: implemented as of Phase 5.
 
 ```text
-User
+Local browser frontend
+  -> Local static files served over HTTP
   -> Lambda Function URL
   -> AWS Lambda
   -> Fixed simulated response
+```
 
-Local validation
-  -> Python Lambda handler
+Additional local validation path:
+
+```text
+Local Python invocation
+  -> backend.handler.lambda_handler
   -> Fixed JSON response
 ```
 
-The frontend and backend currently exist as separate pieces.
+Current notes:
 
-- The backend is deployed in AWS through SAM.
-- The frontend remains local and still uses JavaScript-only simulation.
-- No frontend-to-backend connection exists yet.
+- The frontend runs locally only.
+- The backend runs in AWS Lambda.
+- The frontend sends a real `POST` request to the deployed Function URL.
+- The backend validates the request and returns a fixed JSON answer.
+- Amazon Bedrock is not integrated yet.
+- CORS for deployed browser requests is handled by the Function URL layer.
+- The Lambda response body keeps only its JSON content header to avoid duplicate CORS headers in browser traffic.
 
-## Current Separate Frontend State
-
-```text
-Local static frontend
-  -> Local JavaScript simulation
-```
-
-## Planned Request Flow
-
-```text
-User
-  -> Static frontend in S3
-  -> HTTPS request
-  -> Lambda Function URL
-  -> AWS Lambda
-  -> Amazon Bedrock
-  -> AWS Lambda
-  -> Frontend response
-```
-
-## Planned Components
-
-- Static frontend hosted from Amazon S3
-- Single AWS Lambda backend entry point
-- Public HTTPS access through a Lambda Function URL
-- LLM inference through Amazon Bedrock
-
-## Planned Responsibilities
+## Current Components
 
 ### Frontend
 
-- Render a minimal question-and-answer interface
-- Submit a question to the backend over HTTPS
-- Render the backend response and basic error states
+- Plain HTML, CSS, and JavaScript in `frontend/`
+- Reads backend configuration from `frontend/config.js`
+- Uses `fetch` plus `AbortController`
+- Renders success and error states without `innerHTML`
+
+### Public backend entry point
+
+- AWS Lambda Function URL
+- Public and unauthenticated in this educational phase
+- CORS currently permissive for local browser testing
 
 ### Lambda backend
 
-- Accept a validated request payload from the frontend
-- Normalize and validate the incoming question
-- Call Amazon Bedrock
-- Return a stable JSON response contract to the frontend
+- Python handler in `backend.handler`
+- Shared validation and response helpers
+- Fixed response to preserve scope before Bedrock integration
 
-### Amazon Bedrock
-
-- Provide the model inference capability for user questions
-- Remain abstracted behind backend code so model choice can evolve later
-
-## Planned API Shape
-
-The public endpoint is planned as a Lambda Function URL.
-
-Current planned contract:
+## Current API Shape
 
 - Method: `POST`
 - Path: `/`
@@ -89,7 +66,7 @@ Current planned contract:
 }
 ```
 
-- Planned successful response:
+- Success response:
 
 ```json
 {
@@ -97,29 +74,50 @@ Current planned contract:
 }
 ```
 
-- Planned validation error response:
+- Error response:
 
 ```json
 {
-  "error": "question is required"
+  "error": {
+    "code": "INVALID_REQUEST",
+    "message": "..."
+  }
 }
 ```
 
-Current local backend implementation already follows the same general response shape:
+Detailed contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
 
-- `POST` requests only
-- JSON request body with `question`
-- JSON response body with `answer`
-- JSON error bodies with status codes
+## Future Planned Architecture
 
-Detailed local contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
-
-## Next Integration Step
+Status: planned only.
 
 ```text
-Local frontend
-  -> Deployed Lambda Function URL
+S3-hosted frontend
+  -> Lambda Function URL
+  -> AWS Lambda
+  -> Amazon Bedrock
+  -> AWS Lambda
+  -> Frontend response
 ```
+
+## Planned Responsibilities
+
+### Frontend
+
+- Render the question-and-answer interface
+- Submit a question to the backend over HTTPS
+- Render the backend response and error states
+
+### Lambda backend
+
+- Validate incoming questions
+- Call Amazon Bedrock in a later phase
+- Return a stable JSON contract to the frontend
+
+### Amazon Bedrock
+
+- Provide model inference for user questions
+- Remain abstracted behind backend code so model choice can evolve later
 
 ## Planned Deployment Flow
 
@@ -133,19 +131,4 @@ Feature branch
   -> S3 frontend synchronization
 ```
 
-Status: planned only. CI/CD has not been implemented yet.
-
-## Security Principles
-
-- Keep public access limited to the intended HTTPS entry point
-- Validate request payloads before invoking Amazon Bedrock
-- Avoid storing secrets in the repository
-- Prefer least-privilege IAM when infrastructure is introduced later
-- Keep user-facing errors generic and log detail server-side only
-
-## Cost Principles
-
-- Keep the architecture intentionally small
-- Avoid unnecessary always-on infrastructure
-- Delay Bedrock and deployment setup until implementation requires them
-- Add cost awareness checks before enabling automated deployment
+Status: planned only. CI/CD and S3 frontend deployment do not exist yet.
