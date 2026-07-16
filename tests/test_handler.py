@@ -5,7 +5,7 @@ from typing import cast
 
 import pytest
 
-from backend import handler
+from backend import bedrock_client, handler
 
 
 class FakeContext:
@@ -14,7 +14,7 @@ class FakeContext:
 
 
 def build_event(
-    body: object = '{"question": "¿Qué es AWS Lambda?"}',
+    body: object = '{"question": "Que es AWS Lambda?"}',
     method: str = "POST",
     *,
     is_base64_encoded: bool = False,
@@ -47,27 +47,44 @@ def decode_error(response: dict[str, object]) -> dict[str, str]:
     return cast(dict[str, str], decoded)
 
 
-def test_lambda_handler_returns_fixed_answer_for_valid_post_request() -> None:
+def patch_bedrock_success(monkeypatch: pytest.MonkeyPatch, answer: str = "Respuesta real") -> None:
+    settings = bedrock_client.BedrockSettings(
+        model_id="eu.amazon.nova-micro-v1:0",
+        max_tokens=500,
+        temperature=0.3,
+    )
+    monkeypatch.setattr(handler, "load_bedrock_settings", lambda: settings)
+    monkeypatch.setattr(handler, "generate_answer", lambda question, *, settings: answer)
+
+
+def test_lambda_handler_returns_bedrock_answer_for_valid_post_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_bedrock_success(monkeypatch, answer="AWS Lambda ejecuta codigo sin servidores.")
+
     response = handler.lambda_handler(
-        build_event(body='{"question": "  ¿Qué es AWS Lambda?  "}'),
+        build_event(body='{"question": "  Que es AWS Lambda?  "}'),
         FakeContext(),
     )
 
     assert response["statusCode"] == 200
     assert response["headers"] == {"Content-Type": "application/json"}
     decoded = decode_body(response)
-    assert "answer" in decoded
-    assert "¿Qué es AWS Lambda?" in str(decoded["answer"])
+    assert decoded == {"answer": "AWS Lambda ejecuta codigo sin servidores."}
 
 
-def test_lambda_handler_accepts_dictionary_bodies_for_local_tests() -> None:
+def test_lambda_handler_accepts_dictionary_bodies_for_local_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_bedrock_success(monkeypatch, answer="Respuesta local")
+
     response = handler.lambda_handler(
         build_event(body={"question": "Pregunta local"}),
         FakeContext(),
     )
 
     assert response["statusCode"] == 200
-    assert "Pregunta local" in str(decode_body(response)["answer"])
+    assert decode_body(response)["answer"] == "Respuesta local"
 
 
 def test_lambda_handler_rejects_invalid_json() -> None:
@@ -80,7 +97,7 @@ def test_lambda_handler_rejects_invalid_json() -> None:
     assert decode_body(response) == {
         "error": {
             "code": "INVALID_JSON",
-            "message": "El cuerpo debe ser JSON válido.",
+            "message": "El cuerpo debe ser JSON valido.",
         }
     }
 
@@ -119,7 +136,7 @@ def test_lambda_handler_rejects_wrong_method() -> None:
     assert decode_body(response) == {
         "error": {
             "code": "METHOD_NOT_ALLOWED",
-            "message": "Solo se admite el método POST.",
+            "message": "Solo se admite el metodo POST.",
         }
     }
 
@@ -134,13 +151,49 @@ def test_lambda_handler_rejects_base64_request_body() -> None:
     assert decode_error(response)["code"] == "INVALID_REQUEST"
 
 
+def test_lambda_handler_returns_controlled_llm_error_for_bedrock_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = bedrock_client.BedrockSettings(
+        model_id="eu.amazon.nova-micro-v1:0",
+        max_tokens=500,
+        temperature=0.3,
+    )
+
+    def fail(*_: object, **__: object) -> str:
+        raise bedrock_client.BedrockInvocationError(
+            category="temporary_unavailable",
+            status_code=503,
+        )
+
+    monkeypatch.setattr(handler, "load_bedrock_settings", lambda: settings)
+    monkeypatch.setattr(handler, "generate_answer", fail)
+
+    response = handler.lambda_handler(build_event(), FakeContext())
+
+    assert response["statusCode"] == 503
+    assert decode_body(response) == {
+        "error": {
+            "code": "LLM_ERROR",
+            "message": "No se ha podido generar una respuesta.",
+        }
+    }
+
+
 def test_lambda_handler_returns_internal_error_without_leaking_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def crash(_: str) -> str:
+    settings = bedrock_client.BedrockSettings(
+        model_id="eu.amazon.nova-micro-v1:0",
+        max_tokens=500,
+        temperature=0.3,
+    )
+
+    def crash(*_: object, **__: object) -> str:
         raise RuntimeError("boom-internal-details")
 
-    monkeypatch.setattr(handler, "build_fixed_answer", crash)
+    monkeypatch.setattr(handler, "load_bedrock_settings", lambda: settings)
+    monkeypatch.setattr(handler, "generate_answer", crash)
 
     response = handler.lambda_handler(build_event(), FakeContext())
 
@@ -155,7 +208,11 @@ def test_lambda_handler_returns_internal_error_without_leaking_details(
     assert "boom-internal-details" not in json.dumps(decoded)
 
 
-def test_lambda_handler_treats_missing_method_as_post_for_local_compatibility() -> None:
+def test_lambda_handler_treats_missing_method_as_post_for_local_compatibility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_bedrock_success(monkeypatch)
+
     event = build_event()
     event.pop("requestContext")
     response = handler.lambda_handler(event, FakeContext())
