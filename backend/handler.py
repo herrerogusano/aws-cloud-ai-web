@@ -11,6 +11,7 @@ from backend.responses import error_response, json_response
 from backend.validation import MAX_QUESTION_LENGTH, ValidationError, validate_question
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class LambdaContext(Protocol):

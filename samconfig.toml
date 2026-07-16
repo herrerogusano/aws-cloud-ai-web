@@ -1,0 +1,23 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "aws-cloud-ai-web-backend"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+stack_name = "aws-cloud-ai-web-backend"
+resolve_s3 = true
+region = "eu-west-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = false
+
+[default.local_invoke.parameters]
+region = "eu-west-1"

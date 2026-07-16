@@ -1,15 +1,67 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Planned serverless infrastructure for aws-cloud-ai-web.
-  Local backend definition for validation and later SAM-based development.
+  Minimal backend infrastructure for aws-cloud-ai-web with a public Lambda Function URL.
 
 Resources:
   QuestionHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
+      FunctionName: aws-cloud-ai-web-backend-handler
       Handler: backend.handler.lambda_handler
       Runtime: python3.13
+      Architectures:
+        - x86_64
       Timeout: 10
       MemorySize: 128
+      Description: Fixed-response backend for the aws-cloud-ai-web portfolio project.
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowHeaders:
+            - Content-Type
+          AllowMethods:
+            - POST
+          MaxAge: 600
+      Tags:
+        Project: aws-cloud-ai-web
+        Component: backend
+        ManagedBy: aws-sam
+        Environment: portfolio
+
+  QuestionHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${QuestionHandlerFunction}
+      RetentionInDays: 7
+      Tags:
+        - Key: Project
+          Value: aws-cloud-ai-web
+        - Key: Component
+          Value: backend
+        - Key: ManagedBy
+          Value: aws-sam
+        - Key: Environment
+          Value: portfolio
+
+Outputs:
+  BackendStackName:
+    Description: CloudFormation stack name for the backend deployment.
+    Value: !Ref AWS::StackName
+
+  QuestionHandlerFunctionName:
+    Description: Deployed Lambda function name.
+    Value: !Ref QuestionHandlerFunction
+
+  QuestionHandlerFunctionUrl:
+    Description: Public Lambda Function URL for the backend.
+    Value: !GetAtt QuestionHandlerFunctionUrl.FunctionUrl
+
+  QuestionHandlerLogGroupName:
+    Description: CloudWatch log group used by the backend Lambda function.
+    Value: !Ref QuestionHandlerLogGroup

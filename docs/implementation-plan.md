@@ -236,6 +236,30 @@ Validation required:
 Manual user action expected:
 Yes. AWS SAM CLI and AWS credentials will be needed for later deployment-related verification.
 
+Current status:
+- Completed on July 16, 2026 on branch `feature/sam-backend-deployment`.
+
+Deployment details:
+- Stack name: `aws-cloud-ai-web-backend`
+- Region: `eu-west-1`
+
+Validation performed:
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest`
+- `uv run mypy .`
+- `sam validate`
+- `sam build`
+- Public Function URL smoke tests for valid POST, invalid request, wrong method, and CORS preflight
+- CloudWatch log verification for successful and failed requests
+
+Deviation from original plan:
+- `sam deploy --confirm-changeset` was previewed first, then rerun with `--no-confirm-changeset` because this environment could not answer the interactive confirmation prompt cleanly.
+
+Manual checks still pending:
+- `sam local invoke` remained blocked by the local container runtime even after Docker Desktop was installed.
+
 ### Phase 5. Frontend-to-backend integration
 
 Objective:
