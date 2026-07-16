@@ -1,12 +1,12 @@
 # Deployment Notes
 
-Status: backend deployed for Phase 6. Frontend remains local only.
+Status: frontend and backend deployed for Phase 7.
 
 ## Deployed Scope
 
+- Frontend: S3 static website
 - Backend: AWS Lambda deployed through AWS SAM
 - Public backend endpoint: Lambda Function URL
-- Frontend: local only
 - Bedrock: integrated through the Converse API
 
 ## Current Deployment Values
@@ -15,41 +15,47 @@ Status: backend deployed for Phase 6. Frontend remains local only.
 - Region: `eu-west-1`
 - Function name: `aws-cloud-ai-web-backend-handler`
 - Function URL: `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
+- Frontend bucket name: `aws-cloud-ai-web-herrerogusano-frontend`
+- Frontend website URL: `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
 - Bedrock model profile: `eu.amazon.nova-micro-v1:0`
 
-## Bedrock Prerequisites
+## Frontend Build Requirements
 
-Before deploying Bedrock-backed changes:
+- none
 
-- verify target region availability for the model or inference profile
-- verify the current AWS account can invoke the selected model
-- verify whether the model requires direct model invocation or an inference profile
-- verify expected pricing or credit consumption
-- confirm that any required model access or subscription step has already been handled by the user
+The frontend is plain static HTML, CSS, and JavaScript and does not require a build step before upload.
 
-For this phase, those checks were completed before deployment and the selected profile was successfully invoked from the current AWS account in `eu-west-1`.
+## Frontend Configuration
 
-## Local Frontend Configuration
-
-The local frontend reads its backend URL from `frontend/config.js`.
+The deployed frontend reads its backend URL from `frontend/config.js`.
 
 Current configuration decision:
 
-- `config.js` is committed in this phase because the Function URL is already public and not a secret
-- `config.example.js` is the safe template for future environment changes
-- the URL should still be treated as environment-specific configuration
+- `config.js` is committed with the public Function URL
+- the URL is not treated as a secret
+- `config.example.js` remains as a local template only
+- `config.example.js` is excluded from S3 sync
 
-Run the local frontend with:
+## CORS
 
-```bash
-python -m http.server 8000 --directory frontend
-```
+The Function URL CORS configuration currently allows:
 
-Then open:
+- `http://localhost:8000`
+- `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
 
-```text
-http://localhost:8000
-```
+This keeps local development working while allowing the public S3 website origin.
+
+## S3 Hosting Notes
+
+The frontend uses S3 static website hosting, which means:
+
+- the public website endpoint is `HTTP`
+- the backend remains `HTTPS`
+- browser requests from the HTTP S3 site to the HTTPS Function URL were verified successfully in a real browser
+
+Do not claim this is an ideal final production architecture.
+
+A future improvement could add CloudFront for HTTPS, but that is intentionally out of scope in this phase.
 
 ## Prerequisites
 
@@ -58,30 +64,6 @@ http://localhost:8000
 - valid AWS credentials
 - region configured for `eu-west-1`
 - Python tooling already validated locally
-
-## Environment Variables
-
-Configured through `template.yaml`:
-
-```text
-BEDROCK_MODEL_ID=eu.amazon.nova-micro-v1:0
-BEDROCK_MAX_TOKENS=500
-BEDROCK_TEMPERATURE=0.3
-```
-
-## IAM
-
-The Lambda execution role requires only:
-
-- `bedrock:GetInferenceProfile`
-- `bedrock:InvokeModel`
-
-The deployed template scopes those permissions to:
-
-- the selected inference profile ARN
-- the linked `amazon.nova-micro-v1:0` foundation-model ARNs required by that profile
-
-No separate application secrets are needed because Bedrock uses the Lambda IAM role.
 
 ## Local Validation Before Deployment
 
@@ -95,15 +77,9 @@ sam validate
 sam build
 ```
 
-If Python dependencies change and SAM must include them:
-
-```bash
-uv export --format requirements-txt --no-dev --output-file requirements.txt
-```
-
 Known local note:
 
-- If `sam build` fails on Windows with access errors in `.aws-sam/build`, remove that directory and rerun the build.
+- If `sam build` fails on Windows with access errors in `.aws-sam` directories, remove that directory and rerun the build.
 
 ## Retrieving Outputs
 
@@ -117,7 +93,7 @@ or:
 aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend --query "Stacks[0].Outputs"
 ```
 
-## Deployment Commands
+## Infrastructure Deployment
 
 Preview the update first:
 
@@ -131,68 +107,85 @@ Then deploy:
 sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
 ```
 
-## Phase 6 Deployment Result
+## Frontend Asset Synchronization
+
+Use the project helper script:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend
+```
+
+The script uses `aws s3 sync frontend/ ... --delete` and excludes:
+
+- `config.example.js`
+- `.env`
+- `.env.*`
+- `*.map`
+- `.DS_Store`
+- `Thumbs.db`
+
+Before using `--delete`, confirm the target bucket is the project frontend bucket and does not contain unrelated files.
+
+## Phase 7 Deployment Result
 
 Deployment date:
 
 - July 16, 2026
 
-CloudFormation review showed only:
+CloudFormation review showed:
 
-- `Modify` on `QuestionHandlerFunctionRole`
+- `Add` on `FrontendWebsiteBucket`
+- `Add` on `FrontendWebsiteBucketPolicy`
+- `Modify` on `QuestionHandlerFunctionUrl`
 - `Modify` on `QuestionHandlerFunction`
 
 No new stack was created.
 
-## Smoke Test Commands
+## Browser Validation Checklist
 
-Successful request:
+Validated successfully in this phase:
 
-```bash
-curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What is AWS Lambda?"}'
-```
+- the public S3 website loaded
+- CSS and JavaScript loaded correctly
+- the page submitted a valid question
+- the request reached the Lambda
+- Bedrock generated the answer
+- the answer rendered correctly
+- loading state worked
+- CORS succeeded
+- no mixed-content error appeared
+- no unexpected browser console errors appeared
+- mobile-width layout collapsed to a single column correctly
 
-Wrong method:
+## Common S3 Website Errors
 
-```bash
-curl -X GET "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/"
-```
+- `403 Forbidden` on the website endpoint:
+  - confirm the bucket policy allows `s3:GetObject`
+  - confirm website hosting is enabled on the bucket
+- missing CSS or JavaScript:
+  - confirm the sync completed
+  - confirm the files are present in the bucket
+- website serves old copy:
+  - refresh with a cache-busting query string or clear browser cache during validation
 
-## Troubleshooting
+## Common Public-Access Errors
 
-If the frontend shows `La aplicacion no tiene configurado el servicio backend.`:
+- public website does not load:
+  - check bucket policy
+  - check Public Access Block configuration
+  - ensure only the bucket policy is used for public reads, not ACLs
 
-- check `frontend/config.js`
-- ensure `window.APP_CONFIG.apiUrl` exists and is a valid `http` or `https` URL
+## Common CORS Errors
 
-If the frontend shows `No se ha podido conectar con el servicio...`:
-
-- confirm the Function URL is still reachable
-- confirm the local page is being served over `http://localhost:8000` or similar
-- if backend code or Function URL CORS behavior changed, redeploy the same SAM stack
-
-If the backend returns `LLM_ERROR`:
-
-- inspect CloudWatch logs for `bedrock_invocation_failed`
-- confirm the selected model profile is still available in `eu-west-1`
-- confirm IAM still allows the selected inference profile and linked foundation-model ARNs
-- distinguish temporary failures such as throttling or service unavailability from access or configuration issues
-
-If `sam build` skips dependencies:
-
-- confirm `requirements.txt` exists at the project root used by `CodeUri`
-- regenerate it from `uv` after dependency changes
-
-If `sam build` fails on Windows with access errors:
-
-- remove `.aws-sam/build`
-- run `sam build` again
+- browser request blocked from S3:
+  - confirm the Function URL `AllowOrigins` list contains the exact website origin
+  - confirm localhost-only assumptions have been removed
+  - verify with an `OPTIONS` preflight request
 
 ## Security Notes
 
-- The Function URL uses `AuthType: NONE`
-- Public unauthenticated access is intentional only for this educational phase
+- the website bucket is public-read by design
+- every object uploaded to that bucket should be considered public
+- public write is not allowed
+- the Function URL uses `AuthType: NONE`
 - CORS is not authentication
-- Bedrock access relies on the Lambda IAM role, not on frontend or environment secrets

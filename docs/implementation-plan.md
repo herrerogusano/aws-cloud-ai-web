@@ -6,7 +6,7 @@ Build a simple serverless portfolio application where a user submits a question 
 
 ## Expected User Flow
 
-1. A user opens the static website.
+1. A user opens the public website.
 2. The user enters a question.
 3. The frontend sends the question to the backend over HTTPS.
 4. The backend validates the request and calls Amazon Bedrock.
@@ -37,7 +37,7 @@ Build a simple serverless portfolio application where a user submits a question 
 
 ```text
 Browser
-  -> Local static frontend
+  -> S3 static website
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
@@ -45,7 +45,7 @@ Browser
 
 ## API Contract
 
-Planned and now implemented public endpoint:
+Implemented public endpoint:
 
 - Method: `POST`
 - Path: `/`
@@ -92,7 +92,7 @@ Error response:
 - `Ruff` for linting and formatting checks
 - `mypy` for static type checking
 - Local validation before opening a Pull Request
-- Manual end-to-end checks when the deployed backend is involved
+- Manual end-to-end checks when deployed infrastructure is involved
 
 ## CI/CD Strategy
 
@@ -153,72 +153,9 @@ Current status:
 
 ### Phase 6. Amazon Bedrock integration
 
-Objective:
-Replace the fixed backend response with Bedrock inference.
-
-Main tasks:
-- add Bedrock client integration
-- handle model request and response mapping
-- add failure handling for Bedrock access issues
-- make model configuration explicit
-- update IAM and deployment docs accordingly
-
-Expected result:
-The backend returns an actual model answer through Amazon Bedrock.
-
-Validation required:
-- backend tests with mocks
-- local quality checks
-- deployment of the existing stack
-- direct endpoint smoke test
-- local frontend browser verification
-- CloudWatch log verification
-
-Manual user action expected:
-Only if the selected model required access enablement or billing approval. That was not required for the chosen model in this phase.
-
 Current status:
+
 - Completed on July 16, 2026 on branch `feature/bedrock-integration`.
-
-Selected model:
-- `eu.amazon.nova-micro-v1:0`
-
-Selection reasoning:
-- available and active in `eu-west-1`
-- compatible with the Converse API
-- successfully invoked from the current AWS account before implementation
-- suitable for simple question answering
-- relatively inexpensive and fast for a portfolio exercise
-
-Dependency decision:
-- package `boto3` with the application instead of relying on the managed runtime version
-- export `requirements.txt` from `uv` so AWS SAM actually includes the pinned SDK in the deployed artifact
-
-Validation performed:
-- `aws bedrock list-foundation-models --region eu-west-1`
-- `aws bedrock get-foundation-model --region eu-west-1 --model-identifier amazon.nova-micro-v1:0`
-- `aws bedrock list-inference-profiles --region eu-west-1`
-- `aws bedrock-runtime converse --region eu-west-1 --cli-input-json ...`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest`
-- `uv run mypy .`
-- `sam validate`
-- `sam build`
-- stack update preview with `sam deploy --no-execute-changeset`
-- stack update with `sam deploy`
-- direct Function URL smoke test returning a generated answer
-- local frontend browser verification with two successful requests
-- CloudWatch log verification
-
-Deployment result:
-- the existing stack `aws-cloud-ai-web-backend` was updated successfully in `eu-west-1`
-- CloudFormation changes were limited to the Lambda function and its IAM role
-
-Deviation from original plan:
-- the chosen Bedrock target had to be an inference profile rather than direct on-demand model invocation
-- packaging `boto3` required adding a generated `requirements.txt` because SAM does not package dependencies directly from `pyproject.toml`
 
 ### Phase 7. S3 frontend deployment
 
@@ -226,27 +163,89 @@ Objective:
 Prepare and deploy the static frontend hosting path.
 
 Main tasks:
-- define the frontend deployment approach
-- create the S3 hosting workflow
-- document the deployed URL once it exists
+- finalize visible frontend copy
+- define S3 website infrastructure in the existing stack
+- synchronize static frontend assets
+- update backend CORS for the deployed website origin
+- document the public website and deployment flow
 
 Expected result:
-The static frontend is available from S3 hosting.
+The static frontend is available publicly from S3 website hosting and can call the Bedrock-backed backend.
 
 Validation required:
-- manual browser verification against the deployed frontend
-- resource inventory update
+- local frontend verification
+- local quality checks
+- stack update preview
+- stack deployment
+- S3 asset synchronization
+- public browser verification
 
 Manual user action expected:
-Yes. AWS deployment access is required.
+No additional manual AWS approval was needed beyond existing deployment access.
+
+Current status:
+- Completed on July 16, 2026 on branch `feature/s3-frontend-deployment`.
+
+Frontend hosting approach:
+- Amazon S3 static website hosting
+
+Selected bucket name:
+- `aws-cloud-ai-web-herrerogusano-frontend`
+
+Website URL:
+- `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
+
+Configuration decision:
+- keep `frontend/config.js` committed with the public Function URL
+- exclude `frontend/config.example.js` from S3 sync
+
+CORS decision:
+- allow the exact S3 website origin
+- keep `http://localhost:8000` for local development
+- avoid wildcard origins now that the real origins are known
+
+Important limitation:
+- S3 static website hosting is HTTP only
+- CloudFront could provide HTTPS later, but it was intentionally not added in this phase
+
+Validation performed:
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest`
+- `uv run mypy .`
+- `sam validate`
+- `sam build`
+- local frontend verification against the deployed Bedrock-backed Lambda
+- stack update preview with `sam deploy --no-execute-changeset`
+- stack update with `sam deploy`
+- `powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend`
+- public browser verification on the S3 website URL
+- direct CORS preflight verification for the S3 website origin
+
+Deployment result:
+- the existing stack `aws-cloud-ai-web-backend` was updated successfully in `eu-west-1`
+- the frontend bucket and bucket policy were added
+- the public website served the static frontend and returned real Bedrock-backed answers through the existing Lambda
+
+Deviation from original plan:
+- no separate frontend stack was needed; the existing stack remained sufficient
 
 ### Phase 8. Pull Request CI
 
 Objective:
 Add Pull Request validation in GitHub Actions.
 
-Status:
-- Planned only.
+Main tasks:
+- create a workflow for lint, format, tests, and type checking
+- reuse the same checks already used locally
+- keep deployment automation out of scope for this phase
+
+Expected result:
+Pull Requests receive automatic validation feedback.
+
+Manual user action expected:
+Yes. A remote GitHub repository already exists, so the remaining work is repository workflow configuration.
 
 ### Phase 9. Automatic deployment
 

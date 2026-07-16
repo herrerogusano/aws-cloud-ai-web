@@ -4,11 +4,11 @@ This document describes the current implemented architecture for `aws-cloud-ai-w
 
 ## Current Architecture
 
-Status: implemented as of Phase 6 on July 16, 2026.
+Status: implemented as of Phase 7 on July 16, 2026.
 
 ```text
-Local browser frontend
-  -> Local static files served over HTTP
+User browser
+  -> S3 static website
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
@@ -18,10 +18,11 @@ Local browser frontend
 Additional local validation path:
 
 ```text
-Local Python tests
-  -> backend.handler.lambda_handler
-  -> mocked Bedrock client
-  -> Stable JSON response contract
+Local browser
+  -> frontend/ served over HTTP
+  -> same Lambda Function URL
+  -> AWS Lambda
+  -> Amazon Bedrock
 ```
 
 ## Current Components
@@ -29,16 +30,27 @@ Local Python tests
 ### Frontend
 
 - Plain HTML, CSS, and JavaScript in `frontend/`
+- Hosted publicly in S3 static website hosting
 - Reads backend configuration from `frontend/config.js`
 - Uses `fetch` plus `AbortController`
 - Uses a 25-second browser timeout to stay above the 20-second Lambda timeout
 - Renders success and error states without `innerHTML`
 
+### Public frontend hosting
+
+- Amazon S3 static website bucket
+- Public read for static frontend assets only
+- Current website URL:
+  - `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
+- HTTP only in this phase
+
 ### Public backend entry point
 
 - AWS Lambda Function URL
 - Public and unauthenticated in this educational phase
-- CORS currently permissive for local browser testing
+- CORS currently allows:
+  - `http://localhost:8000`
+  - `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
 
 ### Lambda backend
 
@@ -96,14 +108,6 @@ The backend sends:
 - one validated user message
 - conservative inference settings
 
-Current intent of the system instruction:
-
-```text
-You are a helpful assistant.
-Answer the user's question clearly and concisely.
-Do not claim access to information or tools you do not have.
-```
-
 The application does not currently include:
 
 - conversation memory
@@ -132,7 +136,7 @@ The frontend only receives controlled public messages and never raw AWS exceptio
 
 ## IAM Notes
 
-The Lambda execution role now includes:
+The Lambda execution role includes:
 
 - `bedrock:GetInferenceProfile` on the selected inference profile ARN
 - `bedrock:InvokeModel` on the selected inference profile ARN
@@ -141,10 +145,18 @@ The Lambda execution role now includes:
 
 No broad Bedrock managed policy was attached.
 
+## Security And Hosting Notes
+
+- the frontend bucket is public-read and should contain only intended public assets
+- public write is not allowed
+- the backend remains publicly reachable through a Function URL
+- CORS is not authentication
+- the S3 static website endpoint is HTTP only
+
 ## Still Not In Scope
 
-- S3-hosted frontend
 - CloudFront
+- Route 53
 - API Gateway
 - authentication
 - database storage
@@ -154,10 +166,9 @@ No broad Bedrock managed policy was attached.
 ## Planned Next Phase
 
 ```text
-S3-hosted frontend
-  -> Lambda Function URL
-  -> AWS Lambda
-  -> Amazon Bedrock
+Pull Request
+  -> GitHub Actions
+  -> lint, format, tests, type checking
 ```
 
-Status: planned only for Phase 7.
+Status: planned only for Phase 8.
