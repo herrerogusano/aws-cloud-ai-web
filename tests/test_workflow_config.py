@@ -11,6 +11,7 @@ def test_ci_workflow_contains_pull_request_validation_and_no_oidc() -> None:
     assert "pull_request:" in workflow
     assert "- main" in workflow
     assert "id-token: write" not in workflow
+    assert "actions/setup-python@v6" in workflow
     assert "uv sync --frozen" in workflow
     assert "uv run ruff check ." in workflow
     assert "uv run ruff format --check ." in workflow
@@ -29,6 +30,7 @@ def test_frontend_deploy_workflow_uses_oidc_and_s3_sync() -> None:
     assert "workflow_dispatch:" in workflow
     assert "id-token: write" in workflow
     assert "group: production-frontend" in workflow
+    assert "actions/setup-python@v6" in workflow
     assert "aws-actions/configure-aws-credentials@v6.2.1" in workflow
     assert 'aws s3 sync frontend/ "s3://$AWS_FRONTEND_BUCKET" --delete' in workflow
     assert '--exclude "config.example.js"' in workflow
