@@ -54,12 +54,7 @@ def test_lambda_handler_returns_fixed_answer_for_valid_post_request() -> None:
     )
 
     assert response["statusCode"] == 200
-    assert response["headers"] == {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST,OPTIONS",
-        "Content-Type": "application/json",
-    }
+    assert response["headers"] == {"Content-Type": "application/json"}
     decoded = decode_body(response)
     assert "answer" in decoded
     assert "¿Qué es AWS Lambda?" in str(decoded["answer"])
