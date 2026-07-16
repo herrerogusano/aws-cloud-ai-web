@@ -37,6 +37,7 @@ def test_production_deploy_workflow_uses_separate_roles_and_orders_backend_first
     assert "SAM_ARTIFACT_BUCKET" in workflow
     assert "sam deploy \\" in workflow
     assert '--stack-name "$SAM_STACK_NAME"' in workflow
+    assert "--no-resolve-s3" in workflow
     assert '--s3-bucket "$SAM_ARTIFACT_BUCKET"' in workflow
     assert '--role-arn "$AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN"' in workflow
     assert "python scripts/check_backend_endpoint.py" in workflow
