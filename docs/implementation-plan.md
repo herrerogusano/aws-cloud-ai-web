@@ -33,27 +33,25 @@ Build a simple serverless portfolio application where a user submits a question 
 - Multi-region deployment
 - Production hardening beyond a portfolio-appropriate baseline
 
-## Initial Architecture
+## Current Architecture
 
 ```text
 Browser
-  -> S3-hosted static frontend
+  -> Local static frontend
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
 ```
 
-The architecture remains planned only until AWS resources are explicitly created.
-
 ## API Contract
 
-Planned public endpoint:
+Planned and now implemented public endpoint:
 
 - Method: `POST`
 - Path: `/`
 - Content-Type: `application/json`
 
-Planned request body:
+Request body:
 
 ```json
 {
@@ -61,7 +59,7 @@ Planned request body:
 }
 ```
 
-Planned success response:
+Success response:
 
 ```json
 {
@@ -69,11 +67,14 @@ Planned success response:
 }
 ```
 
-Planned error response:
+Error response:
 
 ```json
 {
-  "error": "string"
+  "error": {
+    "code": "string",
+    "message": "string"
+  }
 }
 ```
 
@@ -91,19 +92,18 @@ Planned error response:
 - `Ruff` for linting and formatting checks
 - `mypy` for static type checking
 - Local validation before opening a Pull Request
-- Add integration-style validation only when the backend and frontend exist
+- Manual end-to-end checks when the deployed backend is involved
 
 ## CI/CD Strategy
 
 - Use short-lived branches and Pull Requests
 - Run local quality checks first
-- Later add GitHub Actions for lint, format, tests, and type checks
+- Later add GitHub Actions for lint, format, tests, and type checking
 - Add deployment automation only after infrastructure and application paths are stable
 
 ## AWS Cost Precautions
 
 - Prefer the smallest possible serverless footprint
-- Avoid deploying until local validation is complete
 - Keep Bedrock usage explicit and test only when needed
 - Track created resources in `docs/aws-resources.md`
 - Add teardown guidance alongside every new resource introduced later
@@ -112,205 +112,44 @@ Planned error response:
 
 The project is done when:
 
-- The frontend can submit a question successfully
-- The backend can validate input and return a Bedrock-backed response
-- The application is deployed through the documented AWS path
-- Basic CI validation runs on Pull Requests
-- The repository documentation matches the implemented system
+- the frontend can submit a question successfully
+- the backend can validate input and return a Bedrock-backed response
+- the application is deployed through the documented AWS path
+- basic CI validation runs on Pull Requests
+- the repository documentation matches the implemented system
 - AWS resources and teardown steps are documented
 
 ## Phased Roadmap
 
 ### Phase 1. Project foundation
 
-Objective:
-Prepare the repository, tooling, documentation, and durable project context.
+Current status:
 
-Main tasks:
-- Create the repository structure.
-- Configure `uv`, `pytest`, `Ruff`, and `mypy`.
-- Document the planned architecture and roadmap.
-- Record initial ADRs and vault context.
-
-Expected result:
-The project can be developed consistently, but no application functionality exists yet.
-
-Validation required:
-- `uv sync`
-- `uv run pytest`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy .`
-- `sam validate` when SAM CLI becomes available
-
-Manual user action expected:
-Yes. The local machine needs AWS SAM CLI installed before `sam validate` can run.
+- Completed.
 
 ### Phase 2. Local frontend shell
 
-Objective:
-Create the static frontend shell without backend integration.
-
-Main tasks:
-- Add the initial HTML structure.
-- Add CSS for a simple portfolio-quality layout.
-- Add frontend JavaScript structure without live API calls.
-
-Expected result:
-The frontend can render locally and collect a question from the user.
-
-Validation required:
-- Manual browser verification
-- Frontend file review
-
-Manual user action expected:
-No.
-
 Current status:
+
 - Completed on branch `feature/frontend-shell`.
-
-Validation performed:
-- Local static file review
-- `pytest` checks for HTML structure, JavaScript syntax, success flow, error flow, loading reset, and safe text rendering
-- Browser automation against a local HTTP server using Playwright already available in the environment
-
-Deviation from original plan:
-- Added lightweight browser automation through existing tooling to validate the frontend behavior more thoroughly without introducing new project dependencies.
 
 ### Phase 3. Local Lambda handler with fixed response
 
-Objective:
-Create the backend entry point locally with a fixed response.
-
-Main tasks:
-- Add a Lambda handler module.
-- Validate request parsing.
-- Return a fixed JSON response without Bedrock.
-- Add backend unit tests.
-
-Expected result:
-The backend can handle the planned request contract locally.
-
-Validation required:
-- `pytest`
-- `mypy`
-- `Ruff`
-
-Manual user action expected:
-No.
-
 Current status:
+
 - Completed on branch `feature/lambda-basic-handler`.
-
-Validation performed:
-- `uv run pytest`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy .`
-- Direct Python invocation of `backend.handler.lambda_handler`
-
-Deviation from original plan:
-- Added reusable response and validation helpers to keep the Lambda response contract consistent without introducing any framework.
-
-Manual checks still pending:
-- `sam validate`, `sam build`, and `sam local invoke` are blocked until AWS SAM CLI is installed locally.
 
 ### Phase 4. AWS SAM backend infrastructure
 
-Objective:
-Define and validate the backend infrastructure in AWS SAM.
-
-Main tasks:
-- Add Lambda resource definitions.
-- Add Lambda Function URL configuration.
-- Add minimal IAM permissions.
-- Validate the SAM template locally.
-
-Expected result:
-Infrastructure as code exists for the backend, but resources are not yet assumed to be deployed.
-
-Validation required:
-- `sam validate`
-- Template review
-
-Manual user action expected:
-Yes. AWS SAM CLI and AWS credentials will be needed for later deployment-related verification.
-
 Current status:
+
 - Completed on July 16, 2026 on branch `feature/sam-backend-deployment`.
-
-Deployment details:
-- Stack name: `aws-cloud-ai-web-backend`
-- Region: `eu-west-1`
-
-Validation performed:
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest`
-- `uv run mypy .`
-- `sam validate`
-- `sam build`
-- Public Function URL smoke tests for valid POST, invalid request, wrong method, and CORS preflight
-- CloudWatch log verification for successful and failed requests
-
-Deviation from original plan:
-- `sam deploy --confirm-changeset` was previewed first, then rerun with `--no-confirm-changeset` because this environment could not answer the interactive confirmation prompt cleanly.
-
-Manual checks still pending:
-- `sam local invoke` remained blocked by the local container runtime even after Docker Desktop was installed.
 
 ### Phase 5. Frontend-to-backend integration
 
-Objective:
-Connect the frontend to the backend contract.
-
-Main tasks:
-- Add frontend fetch logic.
-- Handle loading, success, and error states.
-- Align request and response behavior with backend tests.
-
-Expected result:
-The frontend can call the backend and render the fixed response.
-
-Validation required:
-- Manual browser testing
-- Backend tests
-
-Manual user action expected:
-No.
-
 Current status:
+
 - Completed on July 16, 2026 on branch `feature/frontend-api-integration`.
-
-Validation performed:
-- `uv run pytest`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy .`
-- `sam validate`
-- `sam build`
-- Browser verification from `http://localhost:8000`
-- Browser verification of the connection-error path with an intentionally bad Function URL
-- Function URL smoke tests for valid `POST`, `OPTIONS` preflight, and `405` wrong method
-- Stack update preview and redeploy of the existing backend stack
-
-Configuration approach:
-- Added `frontend/config.js` for the current public Function URL
-- Added `frontend/config.example.js` as the safe template
-- Kept the URL out of main frontend logic and read it through `window.APP_CONFIG`
-- Committed `config.js` for this learning phase because the Function URL is public and not a secret
-
-Backend adjustment made during this phase:
-- Removed duplicated CORS headers from Lambda responses after a real browser request exposed two `Access-Control-Allow-Origin` values on deployed `POST` responses
-- Left deployed browser CORS responsibility in the Function URL layer
-- Redeployed the same stack without creating new resources
-
-Deviation from original plan:
-- A small backend fix was needed even though this phase was frontend-led, because browser CORS behavior failed in practice despite earlier CLI smoke tests passing.
-
-Manual checks still pending:
-- A true narrow mobile-width browser pass is still worth confirming in a normal browser window because the in-app browser viewport override did not actually shrink `window.innerWidth`.
 
 ### Phase 6. Amazon Bedrock integration
 
@@ -318,20 +157,68 @@ Objective:
 Replace the fixed backend response with Bedrock inference.
 
 Main tasks:
-- Add Bedrock client integration.
-- Handle model request and response mapping.
-- Add failure handling for Bedrock access issues.
-- Revisit dependency choices if the runtime needs explicit SDK packaging.
+- add Bedrock client integration
+- handle model request and response mapping
+- add failure handling for Bedrock access issues
+- make model configuration explicit
+- update IAM and deployment docs accordingly
 
 Expected result:
 The backend returns an actual model answer through Amazon Bedrock.
 
 Validation required:
-- Backend tests where practical
-- Manual integration verification
+- backend tests with mocks
+- local quality checks
+- deployment of the existing stack
+- direct endpoint smoke test
+- local frontend browser verification
+- CloudWatch log verification
 
 Manual user action expected:
-Yes. Bedrock model access must be enabled and verified by the user in the target AWS account.
+Only if the selected model required access enablement or billing approval. That was not required for the chosen model in this phase.
+
+Current status:
+- Completed on July 16, 2026 on branch `feature/bedrock-integration`.
+
+Selected model:
+- `eu.amazon.nova-micro-v1:0`
+
+Selection reasoning:
+- available and active in `eu-west-1`
+- compatible with the Converse API
+- successfully invoked from the current AWS account before implementation
+- suitable for simple question answering
+- relatively inexpensive and fast for a portfolio exercise
+
+Dependency decision:
+- package `boto3` with the application instead of relying on the managed runtime version
+- export `requirements.txt` from `uv` so AWS SAM actually includes the pinned SDK in the deployed artifact
+
+Validation performed:
+- `aws bedrock list-foundation-models --region eu-west-1`
+- `aws bedrock get-foundation-model --region eu-west-1 --model-identifier amazon.nova-micro-v1:0`
+- `aws bedrock list-inference-profiles --region eu-west-1`
+- `aws bedrock-runtime converse --region eu-west-1 --cli-input-json ...`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest`
+- `uv run mypy .`
+- `sam validate`
+- `sam build`
+- stack update preview with `sam deploy --no-execute-changeset`
+- stack update with `sam deploy`
+- direct Function URL smoke test returning a generated answer
+- local frontend browser verification with two successful requests
+- CloudWatch log verification
+
+Deployment result:
+- the existing stack `aws-cloud-ai-web-backend` was updated successfully in `eu-west-1`
+- CloudFormation changes were limited to the Lambda function and its IAM role
+
+Deviation from original plan:
+- the chosen Bedrock target had to be an inference profile rather than direct on-demand model invocation
+- packaging `boto3` required adding a generated `requirements.txt` because SAM does not package dependencies directly from `pyproject.toml`
 
 ### Phase 7. S3 frontend deployment
 
@@ -339,16 +226,16 @@ Objective:
 Prepare and deploy the static frontend hosting path.
 
 Main tasks:
-- Define the frontend deployment approach.
-- Create the S3 hosting workflow.
-- Document the deployed URL once it exists.
+- define the frontend deployment approach
+- create the S3 hosting workflow
+- document the deployed URL once it exists
 
 Expected result:
 The static frontend is available from S3 hosting.
 
 Validation required:
-- Manual browser verification against the deployed frontend
-- Resource inventory update
+- manual browser verification against the deployed frontend
+- resource inventory update
 
 Manual user action expected:
 Yes. AWS deployment access is required.
@@ -358,59 +245,21 @@ Yes. AWS deployment access is required.
 Objective:
 Add Pull Request validation in GitHub Actions.
 
-Main tasks:
-- Create a workflow for tests, lint, format, and type checking.
-- Run the same checks already used locally.
-- Keep secrets out of the workflow unless later required.
-
-Expected result:
-Pull Requests receive automatic validation feedback.
-
-Validation required:
-- Workflow syntax review
-- CI run on a Pull Request
-
-Manual user action expected:
-Yes. A remote GitHub repository is required.
+Status:
+- Planned only.
 
 ### Phase 9. Automatic deployment
 
 Objective:
 Automate deployment after merges to the main branch.
 
-Main tasks:
-- Add a deployment workflow.
-- Configure GitHub secrets or OIDC-based access.
-- Deploy the backend with AWS SAM.
-- Synchronize frontend assets to S3.
-
-Expected result:
-A merge to `main` can trigger controlled deployment automation.
-
-Validation required:
-- Workflow run review
-- Deployment verification
-
-Manual user action expected:
-Yes. Repository configuration and AWS deployment permissions are required.
+Status:
+- Planned only.
 
 ### Phase 10. Portfolio documentation and project closure
 
 Objective:
 Finalize portfolio-facing documentation and close the project cleanly.
 
-Main tasks:
-- Update the README with implemented behavior.
-- Finalize architecture and AWS resource inventory.
-- Finalize teardown guidance.
-- Document lessons learned and tradeoffs.
-
-Expected result:
-The repository clearly demonstrates the finished portfolio project.
-
-Validation required:
-- Documentation review
-- Final end-to-end smoke test
-
-Manual user action expected:
-No, unless a final deployment verification is still pending.
+Status:
+- Planned only.
