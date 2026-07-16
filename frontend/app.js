@@ -7,7 +7,7 @@ export const NETWORK_ERROR_MESSAGE =
 export const TIMEOUT_ERROR_MESSAGE =
     "La solicitud esta tardando demasiado. Intentalo de nuevo en unos segundos.";
 export const CONFIGURATION_ERROR_MESSAGE =
-    "La aplicacion no tiene configurado el servicio backend.";
+    "La aplicacion no esta disponible en este momento.";
 
 class PublicError extends Error {}
 
@@ -194,7 +194,7 @@ export function createApp(elements, options = {}) {
         isSubmitting = isLoading;
         elements.form.setAttribute("aria-busy", String(isLoading));
         elements.submitButton.disabled = isLoading;
-        elements.submitButton.textContent = isLoading ? "Consultando backend..." : "Enviar pregunta";
+        elements.submitButton.textContent = isLoading ? "Generando..." : "Preguntar";
         elements.loadingIndicator.hidden = !isLoading;
     }
 

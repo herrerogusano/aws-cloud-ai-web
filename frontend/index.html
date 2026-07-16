@@ -6,38 +6,33 @@
     <title>Pregunta a la IA</title>
     <meta
         name="description"
-        content="Frontend local conectado a una Lambda Function URL para probar la experiencia antes de integrar Amazon Bedrock."
+        content="Escribe una pregunta y recibe una respuesta generada por inteligencia artificial."
     >
     <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
     <main class="shell" aria-labelledby="page-title">
         <section class="hero">
-            <p class="eyebrow">aws-cloud-ai-web</p>
             <h1 id="page-title">Pregunta a la IA</h1>
             <p class="intro">
-                Escribe una pregunta y prueba la integracion local del frontend con la Lambda
-                desplegada en AWS antes de conectar Amazon Bedrock.
-            </p>
-            <p class="local-note">
-                Esta fase sigue ejecutandose en local, pero ahora envia una peticion real al
-                backend publico y devuelve una respuesta fija.
+                Escribe una pregunta y recibe una respuesta generada por inteligencia artificial.
             </p>
         </section>
 
-        <section class="workspace" aria-label="Pregunta al backend desplegado">
+        <section class="workspace" aria-label="Haz una pregunta">
             <form id="question-form" class="panel form-panel" novalidate>
                 <div class="panel-heading">
                     <h2>Tu pregunta</h2>
-                    <p>Usa una sola pregunta por envio. Maximo 1.000 caracteres.</p>
+                    <p>Haz una sola pregunta por envio. Maximo 1.000 caracteres.</p>
                 </div>
 
-                <label class="field-label" for="question-input">Escribe tu pregunta</label>
+                <label class="field-label" for="question-input">Tu pregunta</label>
                 <textarea
                     id="question-input"
                     name="question"
                     rows="7"
                     maxlength="1000"
+                    placeholder="Escribe aqui tu pregunta..."
                     autocomplete="off"
                     spellcheck="true"
                     aria-describedby="question-help question-counter"
@@ -45,14 +40,13 @@
 
                 <div class="field-meta">
                     <p id="question-help" class="helper-text">
-                        El frontend usa una Function URL configurada en <code>config.js</code>. La
-                        respuesta sigue siendo fija mientras Bedrock permanece fuera de alcance.
+                        Cuanto mas clara sea tu pregunta, mejor sera la respuesta.
                     </p>
                     <p id="question-counter" class="counter" aria-live="polite">0 / 1000</p>
                 </div>
 
                 <div class="actions">
-                    <button id="submit-button" type="submit">Enviar pregunta</button>
+                    <button id="submit-button" type="submit">Preguntar</button>
                     <p
                         id="loading-indicator"
                         class="loading"
@@ -60,7 +54,7 @@
                         aria-live="polite"
                         hidden
                     >
-                        Pensando...
+                        Generando respuesta...
                     </p>
                 </div>
             </form>
@@ -68,7 +62,7 @@
             <section class="panel output-panel" aria-labelledby="response-title">
                 <div class="panel-heading">
                     <h2 id="response-title">Respuesta</h2>
-                    <p>Respuesta devuelta por el backend desplegado en AWS.</p>
+                    <p>La respuesta aparecera aqui.</p>
                 </div>
 
                 <div

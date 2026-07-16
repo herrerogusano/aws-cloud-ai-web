@@ -143,7 +143,12 @@ def test_html_contains_expected_accessible_controls_and_scripts() -> None:
 
     tags = parser.tags
     assert any(tag == "form" for tag, _ in tags)
-    assert any(tag == "textarea" and attrs.get("id") == "question-input" for tag, attrs in tags)
+    assert any(
+        tag == "textarea"
+        and attrs.get("id") == "question-input"
+        and attrs.get("placeholder") == "Escribe aqui tu pregunta..."
+        for tag, attrs in tags
+    )
     assert any(tag == "label" and attrs.get("for") == "question-input" for tag, attrs in tags)
     assert any(tag == "button" and attrs.get("type") == "submit" for tag, attrs in tags)
     assert any(
@@ -212,7 +217,7 @@ def test_missing_configuration_is_reported_and_submit_stays_disabled() -> None:
         """,
     )
     parsed = json.loads(output)
-    assert parsed["errorText"] == "La aplicacion no tiene configurado el servicio backend."
+    assert parsed["errorText"] == "La aplicacion no esta disponible en este momento."
     assert parsed["errorHidden"] is False
     assert parsed["submitDisabled"] is True
     assert parsed["configurationErrorMessage"] == parsed["errorText"]
@@ -298,7 +303,7 @@ def test_success_flow_resets_loading_and_renders_safe_text() -> None:
               return createJsonResponse({{
                 body: {{
                   answer: [
-                    "Esta es una respuesta simulada del backend para",
+                    "Respuesta generada para",
                     "<strong>texto seguro</strong>.",
                   ].join(" "),
                 }},
@@ -338,6 +343,32 @@ def test_success_flow_resets_loading_and_renders_safe_text() -> None:
     assert parsed["disabledAfter"] is False
     assert parsed["loadingHiddenAfter"] is True
     assert parsed["busyAfter"] == "false"
+
+
+def test_frontend_public_copy_does_not_contain_obsolete_phase_language() -> None:
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8").lower()
+
+    forbidden_phrases = [
+        "respuesta simulada",
+        "respuesta fija",
+        "bedrock permanece fuera de alcance",
+        "antes de conectar amazon bedrock",
+        "esta fase sigue ejecutandose en local",
+        "frontend local",
+        "lambda function url",
+        "aws",
+    ]
+
+    for phrase in forbidden_phrases:
+        assert phrase not in html
+
+
+def test_frontend_sync_script_excludes_non_public_files() -> None:
+    script = (REPO_ROOT / "scripts" / "sync_frontend.ps1").read_text(encoding="utf-8")
+
+    assert "config.example.js" in script
+    assert "--delete" in script
+    assert "frontend/" in script
 
 
 def test_backend_validation_error_is_displayed_and_input_is_preserved() -> None:
