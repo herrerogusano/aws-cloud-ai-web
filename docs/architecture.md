@@ -1,109 +1,148 @@
 # Architecture
 
-This document describes the current implemented architecture for `aws-cloud-ai-web`.
+This document describes the deployed runtime architecture and the delivery architecture for `aws-cloud-ai-web`.
 
-## Current Architecture
+Status on July 16, 2026:
 
-Status: application flow implemented and repository delivery flow defined as of July 16, 2026.
+- The public website is deployed in Amazon S3
+- The backend is deployed as an AWS Lambda Function URL
+- The Lambda generates real answers through Amazon Bedrock
+- CI is working on Pull Requests
+- The latest merged production deployment workflow needs one follow-up fix from branch `docs/project-closure` before it can be considered fully reverified on `main`
 
-```text
-User browser
-  -> S3 static website
-  -> Lambda Function URL
-  -> AWS Lambda
-  -> Amazon Bedrock
-  -> Generated answer
+## Runtime Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser"] --> Website["Amazon S3 static website"]
+    Website --> FunctionUrl["Lambda Function URL"]
+    FunctionUrl --> Handler["AWS Lambda handler"]
+    Handler --> Bedrock["Amazon Bedrock Converse API"]
+    Handler --> Logs["CloudWatch Logs"]
 ```
 
-Additional local validation path:
+### Runtime Components
 
-```text
-Local browser
-  -> frontend/ served over HTTP
-  -> same Lambda Function URL
-  -> AWS Lambda
-  -> Amazon Bedrock
+`Browser`
+
+- Loads static assets from the public S3 website endpoint
+- Sends one JSON `POST` request per question
+- Uses a 25-second timeout in the frontend
+
+`Amazon S3 static website`
+
+- Hosts `index.html`, `styles.css`, `app.js`, and `config.js`
+- Is public-read by bucket policy
+- Serves content over HTTP only in this phase
+
+`Lambda Function URL`
+
+- Public, unauthenticated entry point
+- Accepts `POST`
+- Enforces browser CORS at the Function URL layer
+
+`AWS Lambda handler`
+
+- Validates incoming JSON
+- Rejects empty or oversized questions
+- Calls a dedicated Bedrock helper module
+- Translates known failures to controlled HTTP responses
+
+`Amazon Bedrock`
+
+- Called through `bedrock-runtime.converse`
+- Uses the selected inference profile `eu.amazon.nova-micro-v1:0`
+- Is authenticated only through the Lambda execution role
+
+`CloudWatch Logs`
+
+- Stores backend logs with 7-day retention
+- Receives request lifecycle events, duration, request ID, and provider failure category
+
+## Delivery Architecture
+
+```mermaid
+flowchart LR
+    Branch["Feature branch"] --> PR["Pull Request"]
+    PR --> CI["GitHub Actions CI"]
+    CI --> Merge["Merge to main"]
+    Merge --> CD["GitHub Actions Deploy Production"]
+    CD --> OIDC["GitHub OIDC token"]
+    OIDC --> BackendRole["GitHub backend deploy role"]
+    OIDC --> FrontendRole["GitHub frontend deploy role"]
+    BackendRole --> CloudFormation["CloudFormation execution role"]
+    CloudFormation --> Stack["AWS SAM / CloudFormation stack update"]
+    FrontendRole --> S3Sync["aws s3 sync"]
 ```
 
-Repository delivery flow:
+### Delivery Responsibilities
+
+`CI`
+
+- Runs on Pull Requests to `main`
+- Does not request OIDC
+- Does not deploy resources
+- Runs formatting, linting, type checking, tests, `sam validate`, and `sam build`
+
+`Deploy Production`
+
+- Runs on push to `main`
+- Requests OIDC
+- Assumes the backend deployment role first
+- Runs `sam deploy` against the existing stack
+- Retrieves outputs and performs backend smoke checks
+- Re-authenticates with the frontend deployment role
+- Syncs static files to the frontend bucket
+
+`GitHub backend deploy role`
+
+- Can orchestrate stack deployment
+- Can upload artifacts to the SAM bucket
+- Can pass only the CloudFormation execution role
+- Cannot deploy frontend files directly
+
+`CloudFormation execution role`
+
+- Applies stack changes with project-scoped permissions
+- Can manage the Lambda, Function URL, log group, frontend bucket infrastructure, and Lambda execution role
+- Cannot modify the GitHub OIDC provider or the GitHub deployment roles
+
+`GitHub frontend deploy role`
+
+- Can list, upload, and delete objects in the frontend bucket
+- Cannot change the backend stack
+
+## Backend Design
+
+Source layout:
 
 ```text
-Feature branch
-  -> Pull Request to main
-  -> GitHub Actions CI
-  -> merge to main
-  -> GitHub Actions production deployment
-  -> GitHub OIDC temporary AWS credentials
-  -> AWS SAM / CloudFormation
-  -> Lambda and infrastructure update
-  -> aws s3 sync
-  -> S3 static website
+backend/
+├── bedrock_client.py
+├── handler.py
+├── responses.py
+├── validation.py
+└── __init__.py
 ```
 
-## Current Components
+Design split:
 
-### Frontend
+- `handler.py` handles request parsing, validation, logging, and HTTP translation
+- `bedrock_client.py` owns model settings, Converse request assembly, provider error mapping, and response extraction
+- `validation.py` enforces the public request rules
+- `responses.py` keeps the Lambda output format consistent
 
-- Plain HTML, CSS, and JavaScript in `frontend/`
-- Hosted publicly in S3 static website hosting
-- Reads backend configuration from `frontend/config.js`
-- Uses `fetch` plus `AbortController`
-- Uses a 25-second browser timeout to stay above the 20-second Lambda timeout
-- Renders success and error states without `innerHTML`
+## API Contract
 
-### Public frontend hosting
-
-- Amazon S3 static website bucket
-- Public read for static frontend assets only
-- Current website URL:
-  - `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
-- HTTP only in this phase
-
-### Public backend entry point
-
-- AWS Lambda Function URL
-- Public and unauthenticated in this educational phase
-- CORS currently allows:
-  - `http://localhost:8000`
-  - `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
-
-### Lambda backend
-
-- Python handler in `backend.handler`
-- Shared validation and response helpers
-- Bedrock integration isolated in `backend.bedrock_client`
-- Uses module-level lazy Bedrock client reuse without network calls during import
-
-### Amazon Bedrock
-
-- Runtime client: `bedrock-runtime`
-- API style: Converse API
-- Selected profile: `eu.amazon.nova-micro-v1:0`
-- Authentication: Lambda execution role only
-
-### Repository delivery
-
-- Pull Request validation is defined in `.github/workflows/ci.yml`
-- Production deployment is defined in `.github/workflows/deploy.yml`
-- GitHub Actions assumes AWS credentials through OIDC only for trusted `main` deployments
-- The backend deployment role is separate from the frontend deployment role
-- `sam deploy` passes a separate CloudFormation execution role
-- Frontend synchronization runs only after backend deployment succeeds
-
-## Current API Shape
-
-- Method: `POST`
-- Path: `/`
-- Request content type: `application/json`
-- Request body:
+Request:
 
 ```json
 {
-  "question": "What can you tell me about serverless architectures?"
+  "question": "What is AWS Lambda?"
 }
 ```
 
-- Success response:
+Successful response:
 
 ```json
 {
@@ -111,7 +150,7 @@ Feature branch
 }
 ```
 
-- Error response:
+Error response:
 
 ```json
 {
@@ -122,80 +161,53 @@ Feature branch
 }
 ```
 
-Detailed contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
-
-## Bedrock Request Design
-
-The backend sends:
-
-- one fixed system instruction
-- one validated user message
-- conservative inference settings
-
-The application does not currently include:
-
-- conversation memory
-- tool use
-- retrieval
-- streaming
+Detailed reference: [api.md](api.md)
 
 ## Timeout Behavior
 
 - Lambda timeout: `20` seconds
-- Frontend request timeout: `25` seconds
+- Frontend timeout: `25` seconds
 
-This keeps normal browser requests from aborting before the Lambda reaches its own timeout budget.
+This keeps the browser timeout slightly above the Lambda timeout and avoids the browser failing first during normal Bedrock latency.
+
+Observed Bedrock example on July 16, 2026:
+
+- One manual `POST` completed in about `2777 ms` according to CloudWatch logs
 
 ## Error Flow
 
-Validation or provider failures are translated as follows:
-
-- invalid request or invalid JSON -> `400`
-- wrong method -> `405`
-- Bedrock temporary unavailability or throttling -> `503`
-- Bedrock provider failure or invalid provider response -> `502`
-- unexpected internal failure -> `500`
-
-The frontend only receives controlled public messages and never raw AWS exception payloads.
-
-## IAM Notes
-
-The Lambda execution role includes:
-
-- `bedrock:GetInferenceProfile` on the selected inference profile ARN
-- `bedrock:InvokeModel` on the selected inference profile ARN
-- `bedrock:InvokeModel` on the linked `amazon.nova-micro-v1:0` foundation-model ARNs for the profile regions
-- a `bedrock:InferenceProfileArn` condition to keep the foundation-model permission tied to the selected profile
-
-No broad Bedrock managed policy was attached.
-
-## Security And Hosting Notes
-
-- the frontend bucket is public-read and should contain only intended public assets
-- public write is not allowed
-- the backend remains publicly reachable through a Function URL
-- CORS is not authentication
-- the S3 static website endpoint is HTTP only
-- the deployment workflow receives AWS credentials only on `push` to `main`
-- the CI workflow receives no AWS credentials and no OIDC token
-- the backend deployment role cannot modify the GitHub OIDC provider or its own trust relationship
-
-## Still Not In Scope
-
-- CloudFront
-- Route 53
-- API Gateway
-- authentication
-- database storage
-- chat history
-- automated rollback strategies beyond CloudFormation rollback
-
-## Planned Next Phase
-
-```text
-project closure
-  -> portfolio preparation
-  -> final documentation pass
+```mermaid
+flowchart TD
+    Request["Incoming request"] --> Validation{"Valid request?"}
+    Validation -- No --> ClientError["400 or 405 controlled error"]
+    Validation -- Yes --> Bedrock["Call Bedrock"]
+    Bedrock --> ProviderOk{"Valid provider response?"}
+    ProviderOk -- Yes --> Success["200 answer response"]
+    ProviderOk -- No --> ProviderError["502 or 503 controlled error"]
+    Bedrock --> Unexpected["Unexpected failure"]
+    Unexpected --> Internal["500 controlled error"]
 ```
 
-Status: planned only for the next phase after the production deployment pipeline is complete.
+Public behavior stays intentionally simple:
+
+- `400` for invalid input
+- `405` for wrong method
+- `502` for provider failure or malformed provider response
+- `503` for temporary unavailability such as throttling
+- `500` for unexpected internal failure
+
+## Security Boundaries
+
+- The frontend contains no secret keys
+- The backend does not expose raw Bedrock or AWS exception payloads
+- The Lambda execution role authenticates to Bedrock through IAM
+- GitHub Actions uses OIDC instead of stored AWS access keys
+- The public frontend and public Function URL are deliberate educational trade-offs, not production-grade security
+
+## Known Limitations
+
+- S3 static website hosting is HTTP only
+- Function URL uses `AuthType: NONE`
+- There is no WAF, authentication, rate limiting, or abuse control
+- There is no database or conversation state
+- There is no automated rollback beyond normal CloudFormation rollback behavior
