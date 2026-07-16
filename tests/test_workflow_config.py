@@ -63,8 +63,10 @@ def test_bootstrap_template_restricts_trust_and_defines_separate_deploy_roles() 
     assert "RoleName: aws-cloud-ai-web-github-backend-deploy" in template
     assert "RoleName: aws-cloud-ai-web-cloudformation-execution" in template
     assert "Service: cloudformation.amazonaws.com" in template
+    assert "transform/Serverless-2016-10-31" in template
     assert "iam:PassRole" in template
     assert "cloudformation:CreateChangeSet" in template
+    assert "cloudformation:GetTemplateSummary" in template
     assert "- s3:ListBucket" in template
     assert "- s3:GetBucketLocation" in template
     assert "- s3:PutObject" in template
