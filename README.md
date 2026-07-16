@@ -4,13 +4,13 @@
 
 ## Current Status
 
-The repository now includes the local frontend shell and the local Lambda handler for Phase 3.
+The repository now includes the local frontend shell, the local Lambda handler, and a deployed AWS backend for Phase 4.
 
 - Repository structure and Python tooling are prepared.
 - A local frontend exists in `frontend/` using plain HTML, CSS, and JavaScript.
-- A local Lambda handler exists in `backend/` and returns a fixed JSON response.
-- The frontend and backend are both implemented locally, but they are not connected to each other yet.
-- No AWS infrastructure has been deployed and no AWS resources have been created for this project.
+- The backend Lambda is deployed in `eu-west-1` through AWS SAM.
+- The backend exposes a public Lambda Function URL and still returns a fixed simulated response.
+- The frontend is still not connected to the deployed backend yet.
 
 ## Planned Architecture
 
@@ -77,6 +77,12 @@ python -c "from backend.handler import lambda_handler; event={'version':'2.0','r
 
 Useful test event fixtures are available in `events/`.
 
+To retrieve deployed stack outputs:
+
+```bash
+sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
+```
+
 Notes:
 
 - `mypy` was selected instead of Pyright to keep the initial toolchain Python-native and simple to run through `uv`.
@@ -112,16 +118,36 @@ Important:
 - No Amazon Bedrock call is made
 - The frontend is not connected to this backend yet
 
+## Deployed Backend Endpoint
+
+Current environment-specific Function URL:
+
+- `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
+
+Example request:
+
+```bash
+curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Que es AWS Lambda?"}'
+```
+
+Security limitations:
+
+- The Function URL is public and unauthenticated in this phase
+- CORS is not authentication or authorization
+- This endpoint is acceptable for a learning exercise, not for sensitive production data
+
 ## Documentation
 
 - Implementation plan: [docs/implementation-plan.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/implementation-plan.md)
 - Planned architecture: [docs/architecture.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/architecture.md)
 - Local API contract: [docs/api.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/api.md)
-- Planned deployment notes: [docs/deployment.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/deployment.md)
-- Planned teardown notes: [docs/teardown.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/teardown.md)
+- Deployment notes: [docs/deployment.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/deployment.md)
+- Teardown notes: [docs/teardown.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/teardown.md)
 - Resource inventory: [docs/aws-resources.md](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/aws-resources.md)
 - Architecture Decision Records: [docs/decisions](/C:/Users/herre/OneDrive/Documentos/aws-cloud-ai-web/docs/decisions)
 
 ## Next Planned Phase
 
-The exact recommended next step is to start Phase 4 from the implementation plan: define and validate the AWS SAM backend infrastructure around the local Lambda handler.
+The exact recommended next step is to start Phase 5 from the implementation plan: connect the frontend to the deployed Lambda Function URL while keeping the backend response fixed.

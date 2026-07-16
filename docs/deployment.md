@@ -1,46 +1,111 @@
 # Deployment Notes
 
-Status: placeholder only during project foundation. No deployment has been performed.
+Status: deployed for Phase 4.
 
-## Intended Deployment Targets
+## Deployed Scope
 
 - Backend: AWS Lambda deployed through AWS SAM
 - Public backend endpoint: Lambda Function URL
-- Frontend: Amazon S3
+- Frontend: not deployed yet
+- Bedrock: not integrated
+
+## Current Deployment Values
+
+- Stack name: `aws-cloud-ai-web-backend`
+- Region: `eu-west-1`
+- Function name: `aws-cloud-ai-web-backend-handler`
+- Function URL: `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
 
 ## Prerequisites
 
 - AWS CLI installed locally
 - AWS SAM CLI installed locally
-- An AWS account with permission to deploy the required resources
-- A configured AWS profile or equivalent credential source
-- Amazon Bedrock model access enabled later when Phase 6 starts
-- A remote GitHub repository before CI/CD automation is introduced
+- Valid AWS credentials
+- Region configured for `eu-west-1`
+- Python tooling already validated locally
 
-## Planned Inputs
+## Local Validation Before Deployment
 
-These values will be documented when they truly exist:
+```bash
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest
+uv run mypy .
+sam validate
+sam build
+```
 
-- Stack names
-- Bucket names
-- Lambda function name
-- Deployment environment names
-- GitHub Actions secrets or OIDC configuration
-- Public URLs
+Notes:
 
-## Current State
+- `sam local invoke` remained blocked in this environment because Docker was not available to SAM even though Docker Desktop was installed.
+- This did not block deployment because unit tests, SAM validation, and SAM build all passed.
 
-- No AWS resources have been created for this project
-- No `sam deploy` command has been run
-- No IAM configuration has been modified for this project
+## Deployment Command
 
-## Future Deployment Checklist
+The stack was deployed with:
 
-This section will be completed when deployment work begins:
+```bash
+sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
+```
 
-1. Validate the SAM template.
-2. Confirm AWS credentials and region.
-3. Confirm Bedrock access requirements.
-4. Deploy backend resources.
-5. Publish frontend assets.
-6. Record resulting resources in `docs/aws-resources.md`.
+The first attempt used `--confirm-changeset`, but that interactive confirmation was not practical in this environment after the changeset preview had already been inspected.
+
+## Retrieving Outputs
+
+```bash
+sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
+```
+
+or:
+
+```bash
+aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend --query "Stacks[0].Outputs"
+```
+
+## Smoke Test Commands
+
+Successful request:
+
+```bash
+curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Que es AWS Lambda?"}'
+```
+
+Validation failure:
+
+```bash
+curl -X POST "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"   "}'
+```
+
+Wrong method:
+
+```bash
+curl -X GET "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/"
+```
+
+Preflight check:
+
+```bash
+curl -X OPTIONS "https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/" \
+  -H "Origin: http://localhost:8000" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: Content-Type"
+```
+
+## Common Failures
+
+- `NoCredentials`: configure AWS credentials before deployment
+- `AccessDenied` on CloudFormation: expand IAM permissions for the deployment identity
+- `sam build` permission errors on Windows: remove `.aws-sam/build` and rerun
+- `sam local invoke` container errors: ensure Docker is running and reachable
+
+## Security Notes
+
+- The Function URL uses `AuthType: NONE`
+- Public unauthenticated access is intentional only for this educational phase
+- CORS is not authentication
+- Bedrock is not used in this phase
