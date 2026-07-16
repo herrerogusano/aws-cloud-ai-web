@@ -4,7 +4,7 @@
 
 ## Current Status
 
-The application is live and the repository now includes GitHub Actions workflows for Pull Request validation and automatic frontend deployment to S3 on pushes to `main`.
+The application is live and the repository includes GitHub Actions workflows for Pull Request validation plus a production deployment pipeline that updates the backend stack through AWS SAM and synchronizes the frontend to S3 on pushes to `main`.
 
 - Repository structure and Python tooling are in place.
 - The frontend lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
@@ -14,8 +14,9 @@ The application is live and the repository now includes GitHub Actions workflows
 - The backend calls Amazon Bedrock through the Converse API.
 - The public API contract remains `{"answer":"..."}` on success.
 - Pull Requests to `main` are validated by GitHub Actions.
-- Frontend deployment to the existing S3 website bucket is automated through GitHub Actions OIDC.
-- Backend deployment still remains manual through AWS SAM.
+- Production deployments on `main` authenticate to AWS through GitHub OIDC.
+- Backend and infrastructure deployment are automated through AWS SAM.
+- Frontend deployment to the existing S3 website bucket is automated after backend deployment succeeds.
 
 ## Current Implemented Architecture
 
@@ -55,7 +56,7 @@ Important limitation:
 - LLM provider: Amazon Bedrock
 - Selected Bedrock model profile: `eu.amazon.nova-micro-v1:0`
 - Frontend hosting: Amazon S3 static website hosting
-- CI/CD: GitHub Actions for PR validation and frontend deployment
+- CI/CD: GitHub Actions for PR validation and production deployment
 - Git workflow: short-lived branches and Pull Requests
 - Commit style: Conventional Commits
 - AWS region: `eu-west-1`
@@ -149,21 +150,31 @@ sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
 The repository includes two workflow files:
 
 - `.github/workflows/ci.yml`
-- `.github/workflows/deploy-frontend.yml`
+- `.github/workflows/deploy.yml`
 
 Implemented behavior:
 
 - Pull Requests targeting `main` run `uv sync --frozen`, Ruff, `mypy`, `pytest`, `sam validate`, and `sam build`
-- pushes to `main` rerun validation, assume an AWS role through GitHub OIDC, and deploy `frontend/` with `aws s3 sync --delete`
-- the frontend deployment workflow does not deploy the backend Lambda
+- pushes to `main` rerun validation, deploy the backend stack through `sam deploy`, and then synchronize `frontend/` with `aws s3 sync --delete`
+- backend deployment and frontend synchronization use separate GitHub OIDC roles
+- CloudFormation receives a separate execution role during `sam deploy`
 
 Required GitHub repository variables:
 
 - `AWS_REGION=eu-west-1`
+- `AWS_BACKEND_DEPLOY_ROLE_ARN=<GitHub OIDC backend deployment role ARN>`
+- `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN=<CloudFormation execution role ARN>`
+- `AWS_FRONTEND_DEPLOY_ROLE_ARN=<GitHub OIDC frontend deployment role ARN>`
 - `AWS_FRONTEND_BUCKET=aws-cloud-ai-web-herrerogusano-frontend`
-- `AWS_DEPLOY_ROLE_ARN=<GitHub OIDC deployment role ARN>`
+- `SAM_ARTIFACT_BUCKET=aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f`
+- `SAM_STACK_NAME=aws-cloud-ai-web-backend`
 
 Bootstrap IAM for the workflow is defined separately in `bootstrap/github-frontend-deploy-iam.yaml`.
+
+Manual deployment remains available as a fallback:
+
+- backend and infrastructure: `sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset`
+- frontend: `powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend`
 
 ## Current Frontend Functionality
 
@@ -209,6 +220,7 @@ Relevant cost sources:
 - CORS is not authentication or authorization
 - the backend trusts AWS IAM for Bedrock access, not an app secret
 - the public website uses HTTP because S3 static website hosting does not provide HTTPS directly
+- deployment automation relies on repository- and branch-restricted OIDC roles rather than permanent AWS keys
 
 ## Validation Summary
 
@@ -228,6 +240,8 @@ Verified in this phase:
 - CORS preflight verification from the S3 website origin
 - responsive mobile-width verification on the public website
 - local workflow configuration tests for CI and frontend deployment
+- successful Pull Request CI run in GitHub Actions
+- successful production frontend deployment workflow on `main`
 
 ## Documentation
 
@@ -241,4 +255,4 @@ Verified in this phase:
 
 ## Next Planned Phase
 
-The exact recommended next step after frontend CI/CD is automatic backend deployment through AWS SAM, keeping the same least-privilege and review-first approach.
+The exact recommended next step after the full deployment pipeline is project closure and portfolio preparation.

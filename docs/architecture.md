@@ -32,8 +32,10 @@ Feature branch
   -> Pull Request to main
   -> GitHub Actions CI
   -> merge to main
-  -> GitHub Actions frontend deployment
+  -> GitHub Actions production deployment
   -> GitHub OIDC temporary AWS credentials
+  -> AWS SAM / CloudFormation
+  -> Lambda and infrastructure update
   -> aws s3 sync
   -> S3 static website
 ```
@@ -82,10 +84,11 @@ Feature branch
 ### Repository delivery
 
 - Pull Request validation is defined in `.github/workflows/ci.yml`
-- Frontend deployment is defined in `.github/workflows/deploy-frontend.yml`
+- Production deployment is defined in `.github/workflows/deploy.yml`
 - GitHub Actions assumes AWS credentials through OIDC only for trusted `main` deployments
-- The frontend deployment role is separate from the Lambda execution role
-- Backend deployment remains manual through AWS SAM in this phase
+- The backend deployment role is separate from the frontend deployment role
+- `sam deploy` passes a separate CloudFormation execution role
+- Frontend synchronization runs only after backend deployment succeeds
 
 ## Current API Shape
 
@@ -175,6 +178,7 @@ No broad Bedrock managed policy was attached.
 - the S3 static website endpoint is HTTP only
 - the deployment workflow receives AWS credentials only on `push` to `main`
 - the CI workflow receives no AWS credentials and no OIDC token
+- the backend deployment role cannot modify the GitHub OIDC provider or its own trust relationship
 
 ## Still Not In Scope
 
@@ -184,13 +188,14 @@ No broad Bedrock managed policy was attached.
 - authentication
 - database storage
 - chat history
-- automatic backend deployment
+- automated rollback strategies beyond CloudFormation rollback
 
 ## Planned Next Phase
 
 ```text
-main push
-  -> GitHub Actions backend deployment through AWS SAM
+project closure
+  -> portfolio preparation
+  -> final documentation pass
 ```
 
-Status: planned only for the next phase.
+Status: planned only for the next phase after the production deployment pipeline is complete.

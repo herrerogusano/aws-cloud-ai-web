@@ -44,10 +44,16 @@ This is the preferred teardown path because the frontend and backend are managed
 - CloudFormation stack `aws-cloud-ai-web-backend`
 - GitHub repository variables:
   - `AWS_REGION`
+  - `AWS_BACKEND_DEPLOY_ROLE_ARN`
+  - `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
+  - `AWS_FRONTEND_DEPLOY_ROLE_ARN`
   - `AWS_FRONTEND_BUCKET`
-  - `AWS_DEPLOY_ROLE_ARN`
+  - `SAM_ARTIFACT_BUCKET`
+  - `SAM_STACK_NAME`
 - CloudFormation bootstrap stack `aws-cloud-ai-web-github-frontend-bootstrap`
 - GitHub frontend deployment role `aws-cloud-ai-web-github-frontend-deploy` if no other project needs it
+- GitHub backend deployment role `aws-cloud-ai-web-github-backend-deploy` if no other project needs it
+- CloudFormation execution role `aws-cloud-ai-web-cloudformation-execution` if no other stack needs it
 
 ## Additional Manual Review
 
@@ -118,8 +124,12 @@ aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aws-cloud-ai-w
 Check that the GitHub repository variables were removed:
 
 - `AWS_REGION`
+ - `AWS_BACKEND_DEPLOY_ROLE_ARN`
+ - `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
+ - `AWS_FRONTEND_DEPLOY_ROLE_ARN`
 - `AWS_FRONTEND_BUCKET`
-- `AWS_DEPLOY_ROLE_ARN`
+- `SAM_ARTIFACT_BUCKET`
+- `SAM_STACK_NAME`
 
 ## Notes
 
