@@ -1,251 +1,102 @@
-# Implementation Plan
+# Implementation Plan and Final Status
+
+This document records the project phases, what was verified, and what remains before the repository can be treated as fully closed.
 
 ## Project Objective
 
-Build a simple serverless portfolio application where a user submits a question in a browser, a frontend sends that question to an AWS Lambda backend, and the backend returns an answer generated through Amazon Bedrock.
+Build a small portfolio application where a user submits a question in a browser, the frontend sends it to AWS Lambda, and the backend returns a real answer generated through Amazon Bedrock.
 
-## Expected User Flow
-
-1. A user opens the public website.
-2. The user enters a question.
-3. The frontend sends the question to the backend over HTTPS.
-4. The backend validates the request and calls Amazon Bedrock.
-5. The backend returns an answer.
-6. The frontend renders the answer or an error state.
-
-## Scope
-
-- One static frontend
-- One public Lambda backend entry point
-- One Bedrock-backed question-and-answer flow
-- Infrastructure managed through AWS SAM
-- Basic CI validation for code quality
-- Deployment automation after the application works locally
-
-## Non-Goals
-
-- Multi-page frontend application
-- User authentication
-- Database storage
-- Conversation history
-- Streaming responses
-- Model fine-tuning
-- Multi-region deployment
-- Production hardening beyond a portfolio-appropriate baseline
-
-## Current Architecture
+## Final Architecture
 
 ```text
 Browser
-  -> S3 static website
+  -> Amazon S3 static website
   -> Lambda Function URL
   -> AWS Lambda
   -> Amazon Bedrock
 ```
 
-## API Contract
+## Validation Strategy
 
-Implemented public endpoint:
+- Local quality checks with `uv`, Ruff, mypy, pytest, `sam validate`, and `sam build`
+- Manual or controlled smoke checks for deployed infrastructure
+- Minimal direct Bedrock validation to avoid unnecessary paid requests
+- GitHub Actions CI for Pull Requests
+- GitHub Actions CD for pushes to `main`
 
-- Method: `POST`
-- Path: `/`
-- Content-Type: `application/json`
+## Phase Status
 
-Request body:
+### 1. Project foundation
 
-```json
-{
-  "question": "string"
-}
-```
+- Status: complete
 
-Success response:
+### 2. Local frontend
 
-```json
-{
-  "answer": "string"
-}
-```
+- Status: complete
 
-Error response:
+### 3. Local Lambda handler
 
-```json
-{
-  "error": {
-    "code": "string",
-    "message": "string"
-  }
-}
-```
+- Status: complete
 
-## Security Principles
+### 4. SAM backend deployment
 
-- Never commit secrets or credentials
-- Validate and sanitize incoming request data
-- Keep the public interface as small as possible
-- Apply least privilege when IAM resources are added
-- Avoid exposing sensitive backend details in frontend responses
+- Status: complete
 
-## Testing Strategy
+### 5. Frontend and backend integration
 
-- `pytest` for backend unit tests
-- `Ruff` for linting and formatting checks
-- `mypy` for static type checking
-- Local validation before opening a Pull Request
-- Manual end-to-end checks when deployed infrastructure is involved
+- Status: complete
 
-## CI/CD Strategy
+### 6. Bedrock integration
 
-- Use short-lived branches and Pull Requests
-- Run local quality checks first
-- Validate Pull Requests in GitHub Actions with the same checks used locally
-- Deploy the backend stack and frontend automatically only after pushes to `main`
-- Keep manual deployment documented as a fallback
+- Status: complete
+- Model profile selected: `eu.amazon.nova-micro-v1:0`
+- API style: Converse API
 
-## AWS Cost Precautions
+### 7. S3 frontend deployment
 
-- Prefer the smallest possible serverless footprint
-- Keep Bedrock usage explicit and test only when needed
-- Track created resources in `docs/aws-resources.md`
-- Add teardown guidance alongside every new resource introduced later
+- Status: complete
+- Public website URL:
+  - `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
 
-## Definition Of Done
+### 8. Pull Request CI
 
-The project is done when:
+- Status: complete
+- Verified real CI run on July 16, 2026:
+  - GitHub Actions run `29526089317`
 
-- the frontend can submit a question successfully
-- the backend can validate input and return a Bedrock-backed response
-- the application is deployed through the documented AWS path
-- basic CI validation runs on Pull Requests
-- the repository documentation matches the implemented system
-- AWS resources and teardown steps are documented
+### 9. Automatic production deployment
 
-## Phased Roadmap
+- Status: not yet reverified after fix
+- What is verified:
+  - Frontend-only production deployment succeeded on July 16, 2026
+  - The full backend-plus-frontend workflow structure exists
+  - The latest merged run on `main` failed because `sam deploy` received both `resolve_s3` and `--s3-bucket`
+- Fix prepared on branch:
+  - `docs/project-closure` adds `--no-resolve-s3` to `.github/workflows/deploy.yml`
+- What remains:
+  - merge the branch
+  - confirm a successful `Deploy Production` run on `main`
 
-### Phase 1. Project foundation
+### 10. Portfolio closure
 
-Current status:
+- Status: prepared in branch, pending merge of the closure PR
+- Completed in this phase:
+  - README rewrite
+  - architecture documentation rewrite
+  - deployment documentation completion
+  - teardown documentation completion
+  - security review
+  - cost review
+  - troubleshooting guide
+  - demo script
+  - interview notes
+  - lessons learned
+  - vault update preparation
 
-- Completed.
+## Final Validation Performed on July 16, 2026
 
-### Phase 2. Local frontend shell
+Local commands:
 
-Current status:
-
-- Completed on branch `feature/frontend-shell`.
-
-### Phase 3. Local Lambda handler with fixed response
-
-Current status:
-
-- Completed on branch `feature/lambda-basic-handler`.
-
-### Phase 4. AWS SAM backend infrastructure
-
-Current status:
-
-- Completed on July 16, 2026 on branch `feature/sam-backend-deployment`.
-
-### Phase 5. Frontend-to-backend integration
-
-Current status:
-
-- Completed on July 16, 2026 on branch `feature/frontend-api-integration`.
-
-### Phase 6. Amazon Bedrock integration
-
-Current status:
-
-- Completed on July 16, 2026 on branch `feature/bedrock-integration`.
-
-### Phase 7. S3 frontend deployment
-
-Objective:
-Prepare and deploy the static frontend hosting path.
-
-Main tasks:
-- finalize visible frontend copy
-- define S3 website infrastructure in the existing stack
-- synchronize static frontend assets
-- update backend CORS for the deployed website origin
-- document the public website and deployment flow
-
-Expected result:
-The static frontend is available publicly from S3 website hosting and can call the Bedrock-backed backend.
-
-Validation required:
-- local frontend verification
-- local quality checks
-- stack update preview
-- stack deployment
-- S3 asset synchronization
-- public browser verification
-
-Manual user action expected:
-No additional manual AWS approval was needed beyond existing deployment access.
-
-Current status:
-- Completed on July 16, 2026 on branch `feature/s3-frontend-deployment`.
-
-Frontend hosting approach:
-- Amazon S3 static website hosting
-
-Selected bucket name:
-- `aws-cloud-ai-web-herrerogusano-frontend`
-
-Website URL:
-- `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
-
-Configuration decision:
-- keep `frontend/config.js` committed with the public Function URL
-- exclude `frontend/config.example.js` from S3 sync
-
-CORS decision:
-- allow the exact S3 website origin
-- keep `http://localhost:8000` for local development
-- avoid wildcard origins now that the real origins are known
-
-Important limitation:
-- S3 static website hosting is HTTP only
-- CloudFront could provide HTTPS later, but it was intentionally not added in this phase
-
-Validation performed:
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest`
-- `uv run mypy .`
-- `sam validate`
-- `sam build`
-- local frontend verification against the deployed Bedrock-backed Lambda
-- stack update preview with `sam deploy --no-execute-changeset`
-- stack update with `sam deploy`
-- `powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend`
-- public browser verification on the S3 website URL
-- direct CORS preflight verification for the S3 website origin
-
-Deployment result:
-- the existing stack `aws-cloud-ai-web-backend` was updated successfully in `eu-west-1`
-- the frontend bucket and bucket policy were added
-- the public website served the static frontend and returned real Bedrock-backed answers through the existing Lambda
-
-Deviation from original plan:
-- no separate frontend stack was needed; the existing stack remained sufficient
-
-### Phase 8. Pull Request CI
-
-Objective:
-Add Pull Request validation in GitHub Actions.
-
-Main tasks:
-- create `.github/workflows/ci.yml`
-- reuse the same checks already used locally
-- keep AWS credentials out of Pull Request validation
-
-Expected result:
-Pull Requests targeting `main` receive automatic validation feedback.
-
-Validation scope:
 - `uv sync --frozen`
 - `uv run ruff check .`
 - `uv run ruff format --check .`
@@ -254,68 +105,25 @@ Validation scope:
 - `sam validate`
 - `sam build`
 
-Workflow decision:
-- trigger on `pull_request` to `main`
-- use `permissions: contents: read`
-- do not request `id-token: write`
+Observed results:
 
-Manual user action expected:
-- approve the Pull Request merge once CI is green
+- Local quality checks passed
+- `sam build` passed after cleaning a stale `.aws-sam/build` directory on Windows
+- Backend smoke check passed against the deployed Function URL
+- Frontend smoke check passed against the public S3 website
+- One direct `POST` request produced a real Bedrock answer
+- CloudWatch logs showed request start, Bedrock start, Bedrock completion, request completion, and duration without logging the full prompt or answer
 
-Current status:
-- Completed on July 16, 2026 on branch `ci/github-actions-frontend-deployment`.
+## Current Known Limitations
 
-Production validation result:
-- Pull Request `#6` ran the real GitHub Actions CI workflow successfully before merge
+- The public website remains HTTP because S3 static website hosting is being used without CloudFront
+- The backend entry point is public and unauthenticated
+- There is no rate limiting
+- There is no production-grade abuse protection
+- The production deployment workflow fix still needs one merged run on `main` to be fully reverified
 
-### Phase 9. Automatic deployment
+## Exact Recommended Next Step
 
-Objective:
-Automate production deployment after merges to the main branch.
-
-Main tasks:
-- create a production deployment workflow
-- validate before deployment
-- authenticate to AWS with GitHub OIDC
-- deploy the backend stack through AWS SAM
-- synchronize `frontend/` to the existing S3 website bucket
-- keep backend deployment ordered before frontend synchronization
-
-Expected result:
-Every push to `main`, including a merged Pull Request, can deploy the backend stack and publish the current frontend safely.
-
-Deployment design:
-- trigger on `push` to `main`
-- support `workflow_dispatch` for controlled reruns
-- use `aws-actions/configure-aws-credentials`
-- assume a dedicated backend deployment role restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
-- pass a separate CloudFormation execution role to `sam deploy`
-- re-authenticate with the frontend deployment role before `aws s3 sync`
-- deploy with `sam deploy` against the existing `aws-cloud-ai-web-backend` stack
-- deploy with `aws s3 sync frontend/ s3://aws-cloud-ai-web-herrerogusano-frontend --delete`
-- exclude `config.example.js`, `.env*`, source maps, and OS metadata files
-- reapply no-cache headers to `index.html` and `config.js`
-- run a backend smoke check without invoking Bedrock
-- run a static website smoke check without invoking Bedrock
-
-Bootstrap decision:
-- use a separate bootstrap template at `bootstrap/github-frontend-deploy-iam.yaml`
-- keep the OIDC provider, GitHub deployment roles, and CloudFormation execution role out of the normal application deployment workflow
-- keep frontend and backend deployment roles separate
-
-Manual user action expected:
-- approve creation or update of the GitHub deployment bootstrap roles
-- merge the Pull Request to trigger the first full production deployment
-
-Current status:
-- Frontend-only production deployment completed on July 16, 2026 on branch `ci/github-actions-frontend-deployment`.
-- Full backend-plus-frontend deployment is being implemented on branch `ci/backend-sam-deployment`.
-- final completion depends on one real merge to `main` succeeding
-
-### Phase 10. Portfolio documentation and project closure
-
-Objective:
-Finalize portfolio-facing documentation and close the project cleanly.
-
-Status:
-- Planned only.
+1. Merge the `docs/project-closure` Pull Request into `main`.
+2. Confirm the next `Deploy Production` workflow run succeeds on `main`.
+3. If that succeeds, mark automatic production deployment and portfolio closure as fully complete.

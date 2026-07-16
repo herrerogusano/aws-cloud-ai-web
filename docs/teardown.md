@@ -1,140 +1,168 @@
-# Teardown Notes
+# Teardown
 
-Status: ready for the deployed frontend and backend, with separate teardown notes for the GitHub Actions frontend deployment bootstrap.
+This guide explains how to remove `aws-cloud-ai-web` safely without accidentally deleting shared IAM infrastructure.
 
-## Safe Teardown Order
+Do not run teardown if you still want the live portfolio demo to remain available.
 
-1. Disable or remove GitHub frontend deployment configuration if it is no longer needed.
-2. Empty the frontend website bucket.
-3. Delete the SAM stack.
-4. Delete the GitHub frontend bootstrap stack if this repository no longer needs automated frontend deployment.
-5. Confirm the bucket and bucket policy are gone.
-6. Confirm the website endpoint no longer serves content.
-7. Confirm the Lambda, Function URL, IAM role, and log group are removed.
-8. Review whether the SAM managed artifact bucket and GitHub OIDC provider should remain.
+## Safe Order
 
-Do not start teardown now if the frontend is still needed for later phases.
+1. Confirm the AWS account and region.
+2. Confirm whether the public site must remain live.
+3. Disable or remove automatic deployment triggers if you are decommissioning the repository.
+4. Empty the frontend bucket.
+5. Delete the application CloudFormation stack.
+6. Confirm Lambda and Function URL deletion.
+7. Confirm stack-managed IAM and logs are gone.
+8. Review SAM deployment artifacts.
+9. Delete the repository bootstrap stack if it is no longer needed.
+10. Remove repository variables from GitHub.
+11. Decide whether the GitHub OIDC provider should remain because of other repositories.
+12. Confirm no project resources remain.
+13. Review billing after teardown.
 
-## Empty The Frontend Bucket First
+## Step 1: Confirm Context
 
-Empty the public website bucket before deleting the stack:
-
-```bash
-aws s3 rm s3://aws-cloud-ai-web-herrerogusano-frontend --recursive
-```
-
-Versioning is not enabled in this phase, so no version cleanup is required.
-
-## Primary Stack Deletion Command
+Check the stack:
 
 ```bash
-sam delete --stack-name aws-cloud-ai-web-backend --region eu-west-1
+aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend --region eu-west-1
 ```
 
-This is the preferred teardown path because the frontend and backend are managed through AWS SAM and CloudFormation.
-
-## What Should Be Removed
-
-- S3 website bucket `aws-cloud-ai-web-herrerogusano-frontend`
-- S3 bucket policy for that bucket
-- Lambda function `aws-cloud-ai-web-backend-handler`
-- Lambda Function URL
-- IAM execution role created for the function
-- CloudWatch log group `/aws/lambda/aws-cloud-ai-web-backend-handler`
-- CloudFormation stack `aws-cloud-ai-web-backend`
-- GitHub repository variables:
-  - `AWS_REGION`
-  - `AWS_BACKEND_DEPLOY_ROLE_ARN`
-  - `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
-  - `AWS_FRONTEND_DEPLOY_ROLE_ARN`
-  - `AWS_FRONTEND_BUCKET`
-  - `SAM_ARTIFACT_BUCKET`
-  - `SAM_STACK_NAME`
-- CloudFormation bootstrap stack `aws-cloud-ai-web-github-frontend-bootstrap`
-- GitHub frontend deployment role `aws-cloud-ai-web-github-frontend-deploy` if no other project needs it
-- GitHub backend deployment role `aws-cloud-ai-web-github-backend-deploy` if no other project needs it
-- CloudFormation execution role `aws-cloud-ai-web-cloudformation-execution` if no other stack needs it
-
-## Additional Manual Review
-
-SAM uses a managed deployment bucket for artifacts:
-
-- `aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f`
-
-This bucket may be shared with future SAM deployments in the same account and region. Do not delete it casually unless you are sure nothing else needs it.
-
-Stack deletion also does not necessarily remove all Bedrock account-level state. Review separately whether the AWS account still has:
-
-- model access settings enabled manually
-- Marketplace subscriptions accepted manually
-- billing or budget settings related to future testing
-
-The GitHub OIDC provider is an account-level IAM resource and may be shared by other repositories. Do not remove it automatically just because this project is being torn down. Check first whether any other repository or workflow still relies on:
-
-- `arn:aws:iam::344774635844:oidc-provider/token.actions.githubusercontent.com`
-
-## Removing The GitHub Frontend Bootstrap Stack
-
-If this repository no longer needs automatic frontend deployment, remove the bootstrap stack:
-
-```bash
-aws cloudformation delete-stack --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
-```
-
-Then confirm it is gone:
+Check the bootstrap stack:
 
 ```bash
 aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
 ```
 
-If the OIDC provider is shared with another bootstrap stack or another repository, keep it in place and only remove the repository-specific role and GitHub variables.
-
-## Verification After Deletion
-
-Check that the stack is gone:
+## Step 2: Empty the Frontend Bucket
 
 ```bash
-aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend
+aws s3 rm s3://aws-cloud-ai-web-herrerogusano-frontend --recursive
 ```
 
-Check that the frontend bucket is gone:
+This is required before CloudFormation can delete the bucket cleanly.
+
+## Step 3: Delete the Application Stack
+
+Preferred command:
+
+```bash
+sam delete --stack-name aws-cloud-ai-web-backend --region eu-west-1
+```
+
+This should remove:
+
+- Lambda function
+- Lambda Function URL
+- Lambda execution role
+- CloudWatch log group
+- Frontend S3 bucket
+- Frontend bucket policy
+
+## Step 4: Verify Application Resource Removal
+
+Check the Lambda:
+
+```bash
+aws lambda get-function --function-name aws-cloud-ai-web-backend-handler --region eu-west-1
+```
+
+Check the log group:
+
+```bash
+aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aws-cloud-ai-web-backend-handler" --region eu-west-1
+```
+
+Check the frontend bucket:
 
 ```bash
 aws s3api head-bucket --bucket aws-cloud-ai-web-herrerogusano-frontend
 ```
 
-Check that the website URL no longer serves content:
+Check the website endpoint:
 
 ```bash
 curl http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com
 ```
 
-Check that the Lambda is gone:
+## Step 5: Review SAM Artifact Storage
+
+Artifact bucket currently used:
+
+- `aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f`
+
+Important note:
+
+- This bucket may be shared with other SAM projects in the same account and region.
+- Do not delete it casually unless you have confirmed it is no longer needed.
+
+## Step 6: Remove GitHub Deployment Bootstrap
+
+If this repository will no longer deploy anything:
 
 ```bash
-aws lambda get-function --function-name aws-cloud-ai-web-backend-handler
+aws cloudformation delete-stack --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
 ```
 
-Check that the log group is gone:
+Verify deletion:
 
 ```bash
-aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aws-cloud-ai-web-backend-handler"
+aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-github-frontend-bootstrap --region eu-west-1
 ```
 
-Check that the GitHub repository variables were removed:
+This removes the repository-specific deployment roles if they are managed only by that bootstrap stack.
+
+## Step 7: Remove GitHub Repository Variables
+
+Delete:
 
 - `AWS_REGION`
- - `AWS_BACKEND_DEPLOY_ROLE_ARN`
- - `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
- - `AWS_FRONTEND_DEPLOY_ROLE_ARN`
+- `AWS_BACKEND_DEPLOY_ROLE_ARN`
+- `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
+- `AWS_FRONTEND_DEPLOY_ROLE_ARN`
 - `AWS_FRONTEND_BUCKET`
 - `SAM_ARTIFACT_BUCKET`
 - `SAM_STACK_NAME`
 
-## Notes
+## Step 8: Review Shared IAM
 
-- the website bucket contains only public static assets in this phase
-- CloudWatch logs may incur small ongoing cost while retained
-- the current log retention is 7 days
-- Bedrock usage charges are request-driven and stop once the endpoint is no longer invoked
-- the GitHub OIDC provider may outlive this project intentionally if other repositories use it
+The GitHub OIDC provider is account-level:
+
+- `arn:aws:iam::344774635844:oidc-provider/token.actions.githubusercontent.com`
+
+Keep it if:
+
+- another repository uses GitHub OIDC in the same AWS account
+
+Remove it only if:
+
+- you have confirmed no repository depends on it
+
+## Step 9: Review Bedrock Account-Level State
+
+Deleting the application stack does not necessarily undo:
+
+- model access approvals
+- Marketplace subscriptions
+- account-level budget settings
+
+Those require separate review in AWS.
+
+## Final Verification Checklist
+
+- The application stack no longer exists
+- The frontend bucket no longer exists
+- The Function URL no longer responds
+- The Lambda no longer exists
+- The log group no longer exists
+- Repository deployment variables are removed
+- The bootstrap stack is removed if not needed
+- The OIDC provider is retained only if intentionally shared
+
+## Billing Follow-Up
+
+After teardown:
+
+- Review Cost Explorer
+- Review AWS Budgets
+- Confirm no unexpected Bedrock, Lambda, S3, or CloudWatch usage remains

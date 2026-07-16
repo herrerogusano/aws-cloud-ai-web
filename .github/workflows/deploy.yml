@@ -99,6 +99,7 @@ jobs:
           sam deploy \
             --stack-name "$SAM_STACK_NAME" \
             --region "$AWS_REGION" \
+            --no-resolve-s3 \
             --s3-bucket "$SAM_ARTIFACT_BUCKET" \
             --capabilities CAPABILITY_IAM \
             --no-confirm-changeset \

@@ -1,122 +1,81 @@
-# Deployment Notes
+# Deployment
 
-Status: frontend and backend are deployed, and the repository defines Pull Request validation plus a production workflow that deploys the backend stack through AWS SAM before synchronizing the frontend to S3.
+This document explains how to validate, deploy, troubleshoot, and recover `aws-cloud-ai-web`.
 
-## Deployed Scope
+## Current Deployment Scope
 
-- Frontend: S3 static website
-- Backend: AWS Lambda deployed through AWS SAM
-- Public backend endpoint: Lambda Function URL
-- Bedrock: integrated through the Converse API
-
-## Current Deployment Values
-
-- Stack name: `aws-cloud-ai-web-backend`
 - Region: `eu-west-1`
-- Function name: `aws-cloud-ai-web-backend-handler`
-- Function URL: `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
-- Frontend bucket name: `aws-cloud-ai-web-herrerogusano-frontend`
-- Frontend website URL: `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
+- Stack: `aws-cloud-ai-web-backend`
+- Public frontend bucket: `aws-cloud-ai-web-herrerogusano-frontend`
+- Public website URL: `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
+- Public backend URL: `https://oekibadklbb4mlie5jlchwgc7a0iweyl.lambda-url.eu-west-1.on.aws/`
 - Bedrock model profile: `eu.amazon.nova-micro-v1:0`
 
-## Frontend Build Requirements
+## Local Prerequisites
 
-- none
+- Git
+- Python 3.13
+- `uv`
+- AWS CLI
+- AWS SAM CLI
+- Docker only if you later need local Lambda container workflows
+- Valid AWS credentials for manual deployment
 
-The frontend is plain static HTML, CSS, and JavaScript and does not require a build step before upload.
+Optional but useful:
 
-## Frontend Configuration
-
-The deployed frontend reads its backend URL from `frontend/config.js`.
-
-Current configuration decision:
-
-- `config.js` is committed with the public Function URL
-- the URL is not treated as a secret
-- `config.example.js` remains as a local template only
-- `config.example.js` is excluded from S3 sync
-
-## CORS
-
-The Function URL CORS configuration currently allows:
-
-- `http://localhost:8000`
-- `http://aws-cloud-ai-web-herrerogusano-frontend.s3-website-eu-west-1.amazonaws.com`
-
-This keeps local development working while allowing the public S3 website origin.
-
-## S3 Hosting Notes
-
-The frontend uses S3 static website hosting, which means:
-
-- the public website endpoint is `HTTP`
-- the backend remains `HTTPS`
-- browser requests from the HTTP S3 site to the HTTPS Function URL were verified successfully in a real browser
-
-Do not claim this is an ideal final production architecture.
-
-A future improvement could add CloudFront for HTTPS, but that is intentionally out of scope in this phase.
-
-## Prerequisites
-
-- AWS CLI installed locally
-- AWS SAM CLI installed locally
-- valid AWS credentials
-- region configured for `eu-west-1`
-- Python tooling already validated locally
-- GitHub repository admin access for variables and workflow review
+- `gh` CLI for reviewing CI/CD runs and Pull Requests
 
 ## Local Validation Before Deployment
 
+Run the full suite:
+
 ```bash
-uv sync
+uv sync --frozen
 uv run ruff check .
 uv run ruff format --check .
-uv run pytest
 uv run mypy .
+uv run pytest
 sam validate
 sam build
 ```
 
-Known local note:
+Windows note:
 
-- If `sam build` fails on Windows with access errors in `.aws-sam` directories, remove that directory and rerun the build.
+- If `sam build` fails with an access error while removing `.aws-sam/build`, delete that directory and rerun the command.
 
-## Retrieving Outputs
+## Manual Backend Deployment
 
-```bash
-sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
-```
-
-or:
-
-```bash
-aws cloudformation describe-stacks --stack-name aws-cloud-ai-web-backend --query "Stacks[0].Outputs"
-```
-
-## Infrastructure Deployment
-
-Preview the update first:
+Preview the change set first:
 
 ```bash
 sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-execute-changeset --no-fail-on-empty-changeset
 ```
 
-Then deploy:
+Apply the deployment:
 
 ```bash
 sam deploy --stack-name aws-cloud-ai-web-backend --region eu-west-1 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset
 ```
 
-## Frontend Asset Synchronization
+Why `CAPABILITY_IAM` is required:
 
-Use the project helper script:
+- The stack manages the Lambda execution role.
+
+Retrieve outputs after deployment:
+
+```bash
+sam list stack-outputs --stack-name aws-cloud-ai-web-backend --region eu-west-1
+```
+
+## Manual Frontend Deployment
+
+Sync the public frontend assets:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/sync_frontend.ps1 -BucketName aws-cloud-ai-web-herrerogusano-frontend
 ```
 
-The script uses `aws s3 sync frontend/ ... --delete` and excludes:
+The sync helper excludes:
 
 - `config.example.js`
 - `.env`
@@ -125,22 +84,25 @@ The script uses `aws s3 sync frontend/ ... --delete` and excludes:
 - `.DS_Store`
 - `Thumbs.db`
 
-Before using `--delete`, confirm the target bucket is the project frontend bucket and does not contain unrelated files.
+Before using `--delete`, confirm the bucket really is the project frontend bucket and contains no unrelated files.
 
-## GitHub Actions CI
+## Automated Deployment
 
-Pull Request validation is defined in `.github/workflows/ci.yml`.
+### Pull Request CI
+
+Workflow file:
+
+- `.github/workflows/ci.yml`
 
 Trigger:
 
-- `pull_request` targeting `main`
-- `workflow_dispatch`
+- Pull Requests to `main`
 
 Permissions:
 
 - `contents: read`
 
-Validation steps:
+Checks:
 
 - `uv sync --frozen`
 - `uv run ruff check .`
@@ -150,40 +112,47 @@ Validation steps:
 - `sam validate`
 - `sam build`
 
-This workflow does not use AWS credentials, does not request OIDC tokens, and does not deploy infrastructure.
+Important behavior:
 
-## GitHub Actions Production Deployment
+- No AWS deployment credentials
+- No OIDC token
+- No Bedrock calls
+- No infrastructure changes
 
-Production deployment is defined in `.github/workflows/deploy.yml`.
+### Production Deployment
 
-Trigger:
+Workflow file:
 
-- `push` to `main`
+- `.github/workflows/deploy.yml`
+
+Triggers:
+
+- Push to `main`
 - `workflow_dispatch`
+
+Permissions:
+
+- `contents: read`
+- `id-token: write`
 
 Concurrency:
 
 - `production-deployment`
 - `cancel-in-progress: false`
 
-Validation-before-deploy behavior:
-
-- reruns the same quality checks as CI
-- fails before authentication if repository variables are missing
-- stops before frontend synchronization if backend deployment fails
-
 Deployment order:
 
-1. validate
-2. assume the GitHub backend deployment role
-3. confirm the target stack and SAM artifact bucket
-4. run `sam deploy`
-5. retrieve stack outputs
-6. run a backend HTTP smoke check without invoking Bedrock
-7. assume the GitHub frontend deployment role
-8. run `aws s3 sync`
-9. reapply cache headers for `index.html` and `config.js`
-10. run the frontend static smoke check
+1. Validate repository variables.
+2. Run the same quality checks used in CI.
+3. Assume the GitHub backend deployment role through OIDC.
+4. Confirm the target stack and SAM artifact bucket.
+5. Run `sam deploy`.
+6. Read stack outputs.
+7. Run the backend smoke check without invoking Bedrock.
+8. Assume the GitHub frontend deployment role.
+9. Sync `frontend/` to the S3 website bucket.
+10. Reapply no-cache headers to `index.html` and `config.js`.
+11. Run the website smoke check.
 
 Backend deployment command:
 
@@ -191,6 +160,7 @@ Backend deployment command:
 sam deploy \
   --stack-name "$SAM_STACK_NAME" \
   --region "$AWS_REGION" \
+  --no-resolve-s3 \
   --s3-bucket "$SAM_ARTIFACT_BUCKET" \
   --capabilities CAPABILITY_IAM \
   --no-confirm-changeset \
@@ -198,9 +168,11 @@ sam deploy \
   --role-arn "$AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN"
 ```
 
-Why `CAPABILITY_IAM` is required:
+Why `--no-resolve-s3` is present:
 
-- the stack manages the Lambda execution role used by the backend function
+- `samconfig.toml` keeps `resolve_s3 = true` for local manual deploys.
+- The GitHub workflow already uses an explicit artifact bucket through `SAM_ARTIFACT_BUCKET`.
+- Without `--no-resolve-s3`, `sam deploy` rejects the command because both modes are set.
 
 Frontend deployment command:
 
@@ -208,177 +180,79 @@ Frontend deployment command:
 aws s3 sync frontend/ s3://$AWS_FRONTEND_BUCKET --delete
 ```
 
-Deployment exclusions:
-
-- `config.example.js`
-- `.env`
-- `.env.*`
-- `*.map`
-- `.DS_Store`
-- `Thumbs.db`
-
-Cache behavior:
-
-- `index.html` is re-uploaded with `Cache-Control: no-cache, no-store, must-revalidate`
-- `config.js` is re-uploaded with `Cache-Control: no-cache, no-store, must-revalidate`
-- other static assets keep the default S3 sync behavior because filenames are not hashed yet
-
-Smoke check behavior:
-
-- request the Lambda Function URL with `GET` and expect the controlled `405 METHOD_NOT_ALLOWED` response
-- confirm `index.html`, `styles.css`, `app.js`, and `config.js` exist in S3
-- request the website URL over HTTP
-- confirm the page title and required static assets load
-- do not submit an AI question automatically, so the workflow avoids extra Bedrock calls
-
-## GitHub OIDC Bootstrap
-
-Bootstrap IAM is kept separate from the application stack in:
-
-- `bootstrap/github-frontend-deploy-iam.yaml`
-
-Bootstrap scope:
-
-- create or reuse the account-level GitHub OIDC provider for `https://token.actions.githubusercontent.com`
-- create the repository-specific role `aws-cloud-ai-web-github-frontend-deploy`
-- create the repository-specific role `aws-cloud-ai-web-github-backend-deploy`
-- create the CloudFormation execution role `aws-cloud-ai-web-cloudformation-execution`
-- restrict trust to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
-- keep frontend synchronization permissions on the frontend role only
-- keep stack-resource permissions on the CloudFormation execution role
-- grant the backend GitHub role only stack-level CloudFormation access, artifact-bucket access, and `iam:PassRole` to the CloudFormation execution role
-
-Apply the bootstrap template manually with an administrative AWS identity. Do not run IAM bootstrap from the GitHub deployment workflow itself.
-
-## Required GitHub Repository Variables
+### Required GitHub Repository Variables
 
 - `AWS_REGION=eu-west-1`
-- `AWS_BACKEND_DEPLOY_ROLE_ARN=<GitHub OIDC backend deployment role ARN>`
+- `AWS_BACKEND_DEPLOY_ROLE_ARN=<backend OIDC role ARN>`
 - `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN=<CloudFormation execution role ARN>`
-- `AWS_FRONTEND_DEPLOY_ROLE_ARN=<GitHub OIDC frontend deployment role ARN>`
+- `AWS_FRONTEND_DEPLOY_ROLE_ARN=<frontend OIDC role ARN>`
 - `AWS_FRONTEND_BUCKET=aws-cloud-ai-web-herrerogusano-frontend`
 - `SAM_ARTIFACT_BUCKET=aws-sam-cli-managed-default-samclisourcebucket-tptpcw2u9y7f`
 - `SAM_STACK_NAME=aws-cloud-ai-web-backend`
 
-These values are configuration, not permanent credentials. Do not store `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` in GitHub for this project.
+These are configuration values, not secrets.
 
-## Role Responsibilities
+## OIDC and IAM Roles
 
-### GitHub backend deployment role
+Bootstrap template:
 
-- assumed by GitHub Actions through OIDC
-- allowed to manage change sets only for `aws-cloud-ai-web-backend`
-- allowed to upload artifacts only to the private SAM artifact bucket
-- allowed to pass only the CloudFormation execution role to CloudFormation
+- `bootstrap/github-frontend-deploy-iam.yaml`
 
-### CloudFormation execution role
+Roles:
 
-- assumed by CloudFormation during `sam deploy`
-- allowed to manage only the known project Lambda, Lambda URL, Lambda permissions, log group, frontend bucket infrastructure, and the stack-managed Lambda execution role
-- not allowed to modify the GitHub OIDC provider
-- not allowed to modify the GitHub deployment roles
+- `aws-cloud-ai-web-github-backend-deploy`
+- `aws-cloud-ai-web-cloudformation-execution`
+- `aws-cloud-ai-web-github-frontend-deploy`
 
-### GitHub frontend deployment role
+Trust restriction used by the GitHub deployment roles:
 
-- assumed by GitHub Actions after backend deployment succeeds
-- allowed only to list the public frontend bucket and write or delete its objects
+- `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
 
-## Rollback And Recovery
+## Smoke Checks
 
-- CloudFormation rollback remains enabled during `sam deploy`
-- an infrastructure failure stops the workflow before frontend synchronization
-- a frontend synchronization failure can leave the backend updated while the static site still needs a rerun
-- the safe first recovery action is to rerun the workflow on the same commit after fixing the permission or transient failure
-- if a bad commit reached `main`, redeploy the previous good Git commit by reverting or by rerunning a workflow on the previous good state
-- the frontend can be restored manually with `scripts/sync_frontend.ps1` from a previous Git revision if needed
+Backend smoke check:
 
-## Phase 7 Deployment Result
+- Sends `GET` to the Function URL
+- Expects `405 METHOD_NOT_ALLOWED`
+- Avoids unnecessary Bedrock calls during deployment
 
-Deployment date:
+Frontend smoke check:
 
-- July 16, 2026
+- Requests the public website
+- Confirms the HTML loads and references expected assets
 
-CloudFormation review showed:
+## Rollback
 
-- `Add` on `FrontendWebsiteBucket`
-- `Add` on `FrontendWebsiteBucketPolicy`
-- `Modify` on `QuestionHandlerFunctionUrl`
-- `Modify` on `QuestionHandlerFunction`
+Application rollback:
 
-No new stack was created.
+1. Identify the last known good commit.
+2. Revert the bad commit or redeploy the older commit through the normal workflow.
+3. Merge to `main`.
+4. Let GitHub Actions redeploy backend and frontend.
 
-## Browser Validation Checklist
+Backend failure:
 
-Validated successfully in this phase:
+1. Inspect CloudFormation stack events.
+2. Review Lambda logs.
+3. Fix the issue and redeploy, or redeploy the last good commit.
 
-- the public S3 website loaded
-- CSS and JavaScript loaded correctly
-- the page submitted a valid question
-- the request reached the Lambda
-- Bedrock generated the answer
-- the answer rendered correctly
-- loading state worked
-- CORS succeeded
-- no mixed-content error appeared
-- no unexpected browser console errors appeared
-- mobile-width layout collapsed to a single column correctly
+Frontend failure:
 
-## Common S3 Website Errors
+1. Use a previous known-good commit.
+2. Rerun the deployment workflow or manually sync the old frontend files.
 
-- `403 Forbidden` on the website endpoint:
-  - confirm the bucket policy allows `s3:GetObject`
-  - confirm website hosting is enabled on the bucket
-- missing CSS or JavaScript:
-  - confirm the sync completed
-  - confirm the files are present in the bucket
-- website serves old copy:
-  - refresh with a cache-busting query string or clear browser cache during validation
+## Troubleshooting Summary
 
-## Common OIDC And Workflow Errors
+For the full guide, see [troubleshooting.md](troubleshooting.md).
 
-- `Could not assume role with OIDC`:
-  - confirm the IAM role trust policy uses `sts.amazonaws.com` as the audience
-  - confirm the `sub` claim is restricted to `repo:herrerogusano/aws-cloud-ai-web:ref:refs/heads/main`
-  - confirm the workflow has `permissions: id-token: write`
-- missing repository variable failure:
-  - configure `AWS_REGION`
-  - configure `AWS_BACKEND_DEPLOY_ROLE_ARN`
-  - configure `AWS_CLOUDFORMATION_EXECUTION_ROLE_ARN`
-  - configure `AWS_FRONTEND_DEPLOY_ROLE_ARN`
-  - configure `AWS_FRONTEND_BUCKET`
-  - configure `SAM_ARTIFACT_BUCKET`
-  - configure `SAM_STACK_NAME`
-- `iam:PassRole` failure during `sam deploy`:
-  - confirm the GitHub backend deployment role can pass only the CloudFormation execution role
-  - confirm the CloudFormation execution role can pass only the Lambda execution role to `lambda.amazonaws.com`
-- CloudFormation stack update failure:
-  - inspect the stack events for `aws-cloud-ai-web-backend`
-  - confirm the execution role covers the stack-managed Lambda, IAM role, log group, and frontend bucket resources
-- S3 permission failure:
-  - confirm the frontend deployment role points to the correct bucket
-  - confirm the frontend deployment role has bucket-level and object-level permissions for that bucket only
-- wrong bucket deployment:
-  - confirm the configured bucket is the project website bucket before rerunning a deployment
+Common issues:
 
-## Common Public-Access Errors
-
-- public website does not load:
-  - check bucket policy
-  - check Public Access Block configuration
-  - ensure only the bucket policy is used for public reads, not ACLs
-
-## Common CORS Errors
-
-- browser request blocked from S3:
-  - confirm the Function URL `AllowOrigins` list contains the exact website origin
-  - confirm localhost-only assumptions have been removed
-  - verify with an `OPTIONS` preflight request
-
-## Security Notes
-
-- the website bucket is public-read by design
-- every object uploaded to that bucket should be considered public
-- public write is not allowed
-- the Function URL uses `AuthType: NONE`
-- CORS is not authentication
-- backend and frontend deployment now share one ordered production workflow, but backend and frontend permissions remain separated
+- Bedrock access denied
+- Wrong model or unavailable model profile
+- Lambda timeout
+- OIDC trust mismatch
+- `iam:PassRole` failure
+- CloudFormation rollback
+- Wrong S3 sync target
+- Browser cache serving stale frontend files
+- `sam deploy` conflict between `resolve_s3` and explicit `--s3-bucket`
